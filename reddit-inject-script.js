@@ -227,145 +227,125 @@
       };
     }
 
+    function extractMediaFromContainer(container, shredditPost, postId, meta) {
+      const postType = shredditPost?.getAttribute("post-type");
+      const effectiveType = postType === "crosspost" ? null : postType;
+
+      if (effectiveType === "gallery" || !effectiveType) {
+        const carousel = container.querySelector("gallery-carousel");
+        if (carousel) {
+          const srcs = getGallerySrcs(carousel);
+          if (srcs.length) {
+            return {
+              type: "gallery",
+              srcs,
+              postId,
+              needsLoad: true,
+              ...meta,
+            };
+          }
+        }
+      }
+
+      const redgifsIframe = container.querySelector(
+        'iframe[src*="redgifs.com"]',
+      );
+      if (redgifsIframe) {
+        return { type: "redgif", src: redgifsIframe.src, postId, ...meta };
+      }
+
+      const player = container.querySelector("shreddit-player");
+      if (player) {
+        const video = player.querySelector("video");
+        if (video?.src) {
+          return { type: "video", src: video.src, postId, ...meta };
+        }
+      }
+
+      if (effectiveType === "image" || effectiveType === "link" || !effectiveType) {
+        const zoomImg = container.querySelector("zoomable-img img");
+        if (zoomImg?.src) {
+          const isGif = zoomImg.src.includes(".gif");
+          return {
+            type: isGif ? "gif" : "image",
+            src: zoomImg.src,
+            postId,
+            ...meta,
+          };
+        }
+        const contentHref = shredditPost?.getAttribute("content-href");
+        if (
+          contentHref &&
+          /\.(jpe?g|png|gif|webp)(\?|$)/i.test(contentHref)
+        ) {
+          const isGif = contentHref.includes(".gif");
+          return {
+            type: isGif ? "gif" : "image",
+            src: contentHref,
+            postId,
+            ...meta,
+          };
+        }
+        const imgs = container.querySelectorAll("img");
+        for (const img of imgs) {
+          if (img.getAttribute("role") === "presentation") continue;
+          if (img.closest("[avatar]") || img.closest("faceplate-hovercard"))
+            continue;
+          if (img.classList.contains("shreddit-subreddit-icon__icon")) continue;
+          const src = getBestSrc(img);
+          if (src) {
+            const isGif = src.includes(".gif");
+            return {
+              type: isGif ? "gif" : "image",
+              src,
+              postId,
+              ...meta,
+            };
+          }
+        }
+      }
+
+      return null;
+    }
+
     function extractPosts() {
-      const articles = document.querySelectorAll("article[data-post-id]");
       const seen = new Set(mediaElements.map((m) => m.postId));
       let added = 0;
 
+      // Feed view: articles with data-post-id
+      const articles = document.querySelectorAll("article[data-post-id]");
       articles.forEach((article) => {
         const postId = article.dataset.postId;
         if (seen.has(postId)) return;
         const shredditPost = article.querySelector("shreddit-post");
-        const postType = shredditPost?.getAttribute("post-type");
         const meta = getPostMeta(article);
-
-        if (postType === "gallery") {
-          const carousel = article.querySelector("gallery-carousel");
-          if (carousel) {
-            const srcs = getGallerySrcs(carousel);
-            if (srcs.length) {
-              mediaElements.push({
-                type: "gallery",
-                srcs,
-                postId,
-                needsLoad: true,
-                ...meta,
-              });
-              added++;
-              return;
-            }
-          }
-        }
-
-        const redgifsIframe = article.querySelector(
-          'iframe[src*="redgifs.com"]',
-        );
-        if (redgifsIframe) {
-          mediaElements.push({
-            type: "redgif",
-            src: redgifsIframe.src,
-            postId,
-            ...meta,
-          });
+        const result = extractMediaFromContainer(article, shredditPost, postId, meta);
+        if (result) {
+          mediaElements.push(result);
+          seen.add(postId);
           added++;
-          return;
-        }
-
-        const player = article.querySelector("shreddit-player");
-        if (player) {
-          const video = player.querySelector("video");
-          if (video?.src) {
-            mediaElements.push({
-              type: "video",
-              src: video.src,
-              postId,
-              ...meta,
-            });
-            added++;
-            return;
-          }
-        }
-
-        if (postType === "image") {
-          const zoomImg = article.querySelector("zoomable-img img");
-          if (zoomImg?.src) {
-            const isGif = zoomImg.src.includes(".gif");
-            mediaElements.push({
-              type: isGif ? "gif" : "image",
-              src: zoomImg.src,
-              postId,
-              ...meta,
-            });
-            added++;
-            return;
-          }
-          const contentHref = shredditPost?.getAttribute("content-href");
-          if (
-            contentHref &&
-            /\.(jpe?g|png|gif|webp)(\?|$)/i.test(contentHref)
-          ) {
-            const isGif = contentHref.includes(".gif");
-            mediaElements.push({
-              type: isGif ? "gif" : "image",
-              src: contentHref,
-              postId,
-              ...meta,
-            });
-            added++;
-            return;
-          }
-          const imgs = article.querySelectorAll("img");
-          for (const img of imgs) {
-            if (img.getAttribute("role") === "presentation") continue;
-            if (img.closest("[avatar]") || img.closest("faceplate-hovercard"))
-              continue;
-            if (img.classList.contains("shreddit-subreddit-icon__icon"))
-              continue;
-            const src = getBestSrc(img);
-            if (src) {
-              const isGif = src.includes(".gif");
-              mediaElements.push({
-                type: isGif ? "gif" : "image",
-                src,
-                postId,
-                ...meta,
-              });
-              added++;
-              return;
-            }
-          }
-        }
-
-        if (postType === "link") {
-          const contentHref = shredditPost?.getAttribute("content-href");
-          if (
-            contentHref &&
-            /\.(jpe?g|png|gif|webp)(\?|$)/i.test(contentHref)
-          ) {
-            const isGif = contentHref.includes(".gif");
-            mediaElements.push({
-              type: isGif ? "gif" : "image",
-              src: contentHref,
-              postId,
-              ...meta,
-            });
-            added++;
-            return;
-          }
-          const imgs = article.querySelectorAll("img");
-          for (const img of imgs) {
-            if (img.getAttribute("role") === "presentation") continue;
-            if (img.closest("[avatar]") || img.closest("faceplate-hovercard"))
-              continue;
-            const src = getBestSrc(img);
-            if (src) {
-              mediaElements.push({ type: "image", src, postId, ...meta });
-              added++;
-              return;
-            }
-          }
         }
       });
+
+      // Single post detail page: shreddit-post not inside an article
+      document.querySelectorAll("shreddit-post[id]").forEach((sp) => {
+        if (sp.closest("article[data-post-id]")) return;
+        const postId = sp.getAttribute("id");
+        if (seen.has(postId)) return;
+        const meta = {
+          permalink: sp.getAttribute("permalink") || "",
+          author: sp.getAttribute("author") || "",
+          subreddit: sp.getAttribute("subreddit-prefixed-name") || "",
+        };
+        const container = sp.closest("main") || sp.parentElement;
+        const result = extractMediaFromContainer(container, sp, postId, meta);
+        if (result) {
+          mediaElements.push(result);
+          seen.add(postId);
+          added++;
+        }
+      });
+
       return added;
     }
 
@@ -417,11 +397,11 @@
       overlay.appendChild(loading);
 
       if (post.type === "gallery" && post.needsLoad) {
-        const article = document.querySelector(
-          `article[data-post-id="${post.postId}"]`,
-        );
-        if (article) {
-          const carousel = article.querySelector("gallery-carousel");
+        const postContainer =
+          document.querySelector(`article[data-post-id="${post.postId}"]`) ||
+          document.querySelector(`shreddit-post[id="${post.postId}"]`)?.closest("main");
+        if (postContainer) {
+          const carousel = postContainer.querySelector("gallery-carousel");
           if (carousel) {
             await forceLoadCarousel(carousel);
             const newSrcs = getGallerySrcs(carousel);
@@ -521,12 +501,15 @@
         overlay.appendChild(video);
       }
 
-      const article = document.querySelector(
-        `article[data-post-id="${post.postId}"]`,
-      );
-      if (article)
-        article.scrollIntoView({ behavior: "instant", block: "center" });
-      if (currentIndex >= mediaElements.length - 3) loadMore();
+      // Only scroll in feed view (multiple posts), not on single post detail pages
+      if (mediaElements.length > 1) {
+        const article = document.querySelector(
+          `article[data-post-id="${post.postId}"]`,
+        );
+        if (article)
+          article.scrollIntoView({ behavior: "instant", block: "center" });
+        if (currentIndex >= mediaElements.length - 3) loadMore();
+      }
     }
 
     function moveGallery(dir) {
@@ -661,9 +644,6 @@
       function (e) {
         if (overlay) return; // already open
 
-        const article = e.target.closest("article[data-post-id]");
-        if (!article) return;
-
         // Check if clicked on media content (images, videos, galleries)
         const clickedMedia =
           e.target.closest("zoomable-img") ||
@@ -676,11 +656,29 @@
             !e.target.classList.contains("shreddit-subreddit-icon__icon") &&
             e.target.getAttribute("role") !== "presentation");
 
-        if (!clickedMedia) return;
+        // For crossposts: the overlay <a> intercepts clicks before gallery images.
+        // Detect clicks inside a crosspost media container that has media content.
+        const crosspostMedia = !clickedMedia &&
+          e.target.closest('[slot="post-media-container"]')?.querySelector(
+            "gallery-carousel, shreddit-player, .redgifs-wrapper, zoomable-img"
+          );
+
+        if (!clickedMedia && !crosspostMedia) return;
+
+        // Find post ID from article wrapper or standalone shreddit-post
+        const article = e.target.closest("article[data-post-id]");
+        let postId;
+        if (article) {
+          postId = article.dataset.postId;
+        } else {
+          const sp = e.target.closest("shreddit-post[id]");
+          if (sp) postId = sp.getAttribute("id");
+        }
+        if (!postId) return;
 
         e.preventDefault();
         e.stopPropagation();
-        openAtPost(article.dataset.postId);
+        openAtPost(postId);
       },
       true,
     );
