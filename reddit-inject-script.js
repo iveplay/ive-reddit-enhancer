@@ -160,13 +160,16 @@
   // ==========================================
   function initFullscreenViewer() {
     let overlay, currentIndex;
-    let mediaElements = [];
     let galleryIndex = 0;
     let currentGallerySrcs = null;
-    let loadingMore = false;
+
+    // Persistent post registry — survives Reddit's feed virtualization
+    const postRegistry = new Map(); // postId -> postData
+    const postOrder = []; // ordered postIds as seen in feed
 
     function getBestSrc(img) {
-      const srcset = img.getAttribute("srcset");
+      const srcset =
+        img.getAttribute("srcset") || img.getAttribute("data-lazy-srcset");
       if (srcset) {
         const entries = srcset.split(",").map((s) => {
           const parts = s.trim().split(/\s+/);
@@ -175,13 +178,14 @@
         entries.sort((a, b) => b.width - a.width);
         if (entries[0]?.url) return entries[0].url;
       }
+      const src = img.src || img.getAttribute("data-lazy-src");
       if (
-        img.src &&
-        img.src !== "" &&
-        !img.src.includes("data:") &&
-        img.src !== window.location.href
+        src &&
+        src !== "" &&
+        !src.includes("data:") &&
+        src !== window.location.href
       )
-        return img.src;
+        return src;
       return null;
     }
 
@@ -199,23 +203,6 @@
         }
       });
       return srcs;
-    }
-
-    async function forceLoadCarousel(carousel) {
-      const nextBtn = carousel.querySelector('[slot="nextButton"] button');
-      const prevBtn = carousel.querySelector('[slot="prevButton"] button');
-      if (!nextBtn) return;
-      for (let i = 0; i < 20; i++) {
-        nextBtn.click();
-        await new Promise((r) => setTimeout(r, 150));
-      }
-      await new Promise((r) => setTimeout(r, 300));
-      if (prevBtn) {
-        for (let i = 0; i < 20; i++) {
-          prevBtn.click();
-          await new Promise((r) => setTimeout(r, 50));
-        }
-      }
     }
 
     function getPostMeta(article) {
@@ -240,7 +227,6 @@
               type: "gallery",
               srcs,
               postId,
-              needsLoad: true,
               ...meta,
             };
           }
@@ -262,22 +248,26 @@
         }
       }
 
-      if (effectiveType === "image" || effectiveType === "link" || !effectiveType) {
+      if (
+        effectiveType === "image" ||
+        effectiveType === "link" ||
+        !effectiveType
+      ) {
         const zoomImg = container.querySelector("zoomable-img img");
-        if (zoomImg?.src) {
-          const isGif = zoomImg.src.includes(".gif");
-          return {
-            type: isGif ? "gif" : "image",
-            src: zoomImg.src,
-            postId,
-            ...meta,
-          };
+        if (zoomImg) {
+          const src = getBestSrc(zoomImg);
+          if (src) {
+            const isGif = src.includes(".gif");
+            return {
+              type: isGif ? "gif" : "image",
+              src,
+              postId,
+              ...meta,
+            };
+          }
         }
         const contentHref = shredditPost?.getAttribute("content-href");
-        if (
-          contentHref &&
-          /\.(jpe?g|png|gif|webp)(\?|$)/i.test(contentHref)
-        ) {
+        if (contentHref && /\.(jpe?g|png|gif|webp)(\?|$)/i.test(contentHref)) {
           const isGif = contentHref.includes(".gif");
           return {
             type: isGif ? "gif" : "image",
@@ -308,30 +298,33 @@
       return null;
     }
 
-    function extractPosts() {
-      const seen = new Set(mediaElements.map((m) => m.postId));
-      let added = 0;
+    function registerArticle(article) {
+      const postId = article.dataset.postId;
+      if (!postId || postRegistry.has(postId)) return;
+      const shredditPost = article.querySelector("shreddit-post");
+      const meta = getPostMeta(article);
+      const result = extractMediaFromContainer(
+        article,
+        shredditPost,
+        postId,
+        meta,
+      );
+      if (result) {
+        postRegistry.set(postId, result);
+        postOrder.push(postId);
+        updatePostCounter();
+      }
+    }
 
-      // Feed view: articles with data-post-id
-      const articles = document.querySelectorAll("article[data-post-id]");
-      articles.forEach((article) => {
-        const postId = article.dataset.postId;
-        if (seen.has(postId)) return;
-        const shredditPost = article.querySelector("shreddit-post");
-        const meta = getPostMeta(article);
-        const result = extractMediaFromContainer(article, shredditPost, postId, meta);
-        if (result) {
-          mediaElements.push(result);
-          seen.add(postId);
-          added++;
-        }
-      });
-
-      // Single post detail page: shreddit-post not inside an article
+    function scanExistingArticles() {
+      document
+        .querySelectorAll("article[data-post-id]")
+        .forEach(registerArticle);
+      // Single post detail page
       document.querySelectorAll("shreddit-post[id]").forEach((sp) => {
         if (sp.closest("article[data-post-id]")) return;
         const postId = sp.getAttribute("id");
-        if (seen.has(postId)) return;
+        if (postRegistry.has(postId)) return;
         const meta = {
           permalink: sp.getAttribute("permalink") || "",
           author: sp.getAttribute("author") || "",
@@ -340,34 +333,48 @@
         const container = sp.closest("main") || sp.parentElement;
         const result = extractMediaFromContainer(container, sp, postId, meta);
         if (result) {
-          mediaElements.push(result);
-          seen.add(postId);
-          added++;
+          postRegistry.set(postId, result);
+          postOrder.push(postId);
         }
       });
-
-      return added;
     }
 
-    async function loadMore() {
-      if (loadingMore) return;
-      loadingMore = true;
-      const el = document.scrollingElement || document.documentElement;
-      const prevCount = mediaElements.length;
-      for (let i = 0; i < 3; i++) {
-        el.scrollTop = el.scrollHeight;
-        await new Promise((r) => setTimeout(r, 1200));
-        extractPosts();
-        if (mediaElements.length > prevCount) break;
+    // Watch for new articles entering the DOM (infinite scroll + re-virtualization)
+    const feedObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          if (node.matches?.("article[data-post-id]")) {
+            registerArticle(node);
+          }
+          node
+            .querySelectorAll?.("article[data-post-id]")
+            .forEach(registerArticle);
+        }
       }
-      updatePostCounter();
-      loadingMore = false;
+    });
+
+    function startFeedObserver() {
+      const feed = document.querySelector("shreddit-feed");
+      if (feed) {
+        feedObserver.observe(feed, { childList: true, subtree: true });
+      } else {
+        // Fallback: observe body until feed appears
+        const bodyObs = new MutationObserver(() => {
+          const feed = document.querySelector("shreddit-feed");
+          if (feed) {
+            bodyObs.disconnect();
+            feedObserver.observe(feed, { childList: true, subtree: true });
+          }
+        });
+        bodyObs.observe(document.body, { childList: true, subtree: true });
+      }
     }
 
     function updatePostCounter() {
       if (!overlay) return;
       const c = document.getElementById("fs-post-counter");
-      if (c) c.textContent = `${currentIndex + 1} / ${mediaElements.length}`;
+      if (c) c.textContent = `${currentIndex + 1} / ${postOrder.length}`;
     }
 
     function makeLink(href, label) {
@@ -383,39 +390,18 @@
       return a;
     }
 
-    async function show(index) {
+    function show(index) {
       currentIndex = index;
       galleryIndex = 0;
       currentGallerySrcs = null;
-      const post = mediaElements[currentIndex];
-      overlay.innerHTML = "";
-
-      const loading = document.createElement("div");
-      loading.textContent = "⏳";
-      loading.style.cssText =
-        "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px;";
-      overlay.appendChild(loading);
-
-      if (post.type === "gallery" && post.needsLoad) {
-        const postContainer =
-          document.querySelector(`article[data-post-id="${post.postId}"]`) ||
-          document.querySelector(`shreddit-post[id="${post.postId}"]`)?.closest("main");
-        if (postContainer) {
-          const carousel = postContainer.querySelector("gallery-carousel");
-          if (carousel) {
-            await forceLoadCarousel(carousel);
-            const newSrcs = getGallerySrcs(carousel);
-            if (newSrcs.length > post.srcs.length) post.srcs = newSrcs;
-            post.needsLoad = false;
-          }
-        }
-      }
-
+      const postId = postOrder[currentIndex];
+      const post = postRegistry.get(postId);
+      if (!post) return;
       overlay.innerHTML = "";
 
       const counter = document.createElement("div");
       counter.id = "fs-post-counter";
-      counter.textContent = `${currentIndex + 1} / ${mediaElements.length}`;
+      counter.textContent = `${currentIndex + 1} / ${postOrder.length}`;
       counter.style.cssText =
         "position:absolute;bottom:44px;left:12px;color:#fff;font-size:12px;opacity:0.5;pointer-events:none;z-index:20;";
       overlay.appendChild(counter);
@@ -501,15 +487,12 @@
         overlay.appendChild(video);
       }
 
-      // Only scroll in feed view (multiple posts), not on single post detail pages
-      if (mediaElements.length > 1) {
-        const article = document.querySelector(
-          `article[data-post-id="${post.postId}"]`,
-        );
-        if (article)
-          article.scrollIntoView({ behavior: "instant", block: "center" });
-        if (currentIndex >= mediaElements.length - 3) loadMore();
-      }
+      // Scroll background feed to current post (hidden behind overlay)
+      const article = document.querySelector(
+        `article[data-post-id="${postId}"]`,
+      );
+      if (article)
+        article.scrollIntoView({ behavior: "instant", block: "center" });
     }
 
     function moveGallery(dir) {
@@ -556,19 +539,11 @@
       }
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        if (currentIndex < mediaElements.length - 1) show(currentIndex + 1);
+        if (currentIndex < postOrder.length - 1) show(currentIndex + 1);
         return;
       }
       if (e.key === "Escape") destroy();
     }
-
-    const fsObserver = new MutationObserver(() => {
-      if (overlay) {
-        const before = mediaElements.length;
-        extractPosts();
-        if (mediaElements.length > before) updatePostCounter();
-      }
-    });
 
     function destroy() {
       if (overlay) {
@@ -576,15 +551,18 @@
         overlay = null;
       }
       currentGallerySrcs = null;
-      fsObserver.disconnect();
       document.removeEventListener("keydown", handleKey);
     }
 
     function openAtPost(postId) {
-      mediaElements = [];
-      extractPosts();
-      if (!mediaElements.length) return;
-      const idx = mediaElements.findIndex((m) => m.postId === postId);
+      // Ensure clicked post is registered (it's in DOM right now)
+      const article = document.querySelector(
+        `article[data-post-id="${postId}"]`,
+      );
+      if (article) registerArticle(article);
+
+      if (!postRegistry.has(postId)) return;
+      const idx = postOrder.indexOf(postId);
       if (idx === -1) return;
 
       overlay = document.createElement("div");
@@ -595,15 +573,12 @@
       };
       document.body.appendChild(overlay);
       document.addEventListener("keydown", handleKey);
-      const feed = document.querySelector("shreddit-feed");
-      if (feed) fsObserver.observe(feed, { childList: true, subtree: true });
       show(idx);
     }
 
     function open() {
-      mediaElements = [];
-      extractPosts();
-      if (!mediaElements.length) return alert("No posts found");
+      scanExistingArticles();
+      if (!postOrder.length) return alert("No posts found");
 
       overlay = document.createElement("div");
       overlay.style.cssText =
@@ -613,8 +588,6 @@
       };
       document.body.appendChild(overlay);
       document.addEventListener("keydown", handleKey);
-      const feed = document.querySelector("shreddit-feed");
-      if (feed) fsObserver.observe(feed, { childList: true, subtree: true });
       show(findVisiblePostIndex());
     }
 
@@ -632,7 +605,7 @@
         }
       });
       if (closestId) {
-        const idx = mediaElements.findIndex((m) => m.postId === closestId);
+        const idx = postOrder.indexOf(closestId);
         if (idx !== -1) return idx;
       }
       return 0;
@@ -658,10 +631,13 @@
 
         // For crossposts: the overlay <a> intercepts clicks before gallery images.
         // Detect clicks inside a crosspost media container that has media content.
-        const crosspostMedia = !clickedMedia &&
-          e.target.closest('[slot="post-media-container"]')?.querySelector(
-            "gallery-carousel, shreddit-player, .redgifs-wrapper, zoomable-img"
-          );
+        const crosspostMedia =
+          !clickedMedia &&
+          e.target
+            .closest('[slot="post-media-container"]')
+            ?.querySelector(
+              "gallery-carousel, shreddit-player, .redgifs-wrapper, zoomable-img",
+            );
 
         if (!clickedMedia && !crosspostMedia) return;
 
@@ -682,6 +658,10 @@
       },
       true,
     );
+
+    // Initial scan + start persistent feed observer
+    scanExistingArticles();
+    startFeedObserver();
 
     // Keep the FAB button too
     const btn = document.createElement("button");
@@ -732,8 +712,19 @@
 		}
 		shreddit-feed.grid-view > hr,
 		shreddit-feed.grid-view > faceplate-loader,
-		shreddit-feed.grid-view > faceplate-partial {
+		shreddit-feed.grid-view > faceplate-partial:not([slot="load-after"]) {
 			display: none !important;
+		}
+		shreddit-feed.grid-view > faceplate-partial[slot="load-after"] {
+			grid-column: 1 / -1;
+		}
+		shreddit-feed.grid-view > .virtualized-placeholder[style*="height: 0"] {
+			display: none !important;
+		}
+		shreddit-feed.grid-view > .virtualized-placeholder:not([style*="height: 0"]) {
+			visibility: hidden !important;
+			height: 0 !important;
+			overflow: hidden !important;
 		}
 		shreddit-feed.grid-view > article {
 			overflow: hidden;
