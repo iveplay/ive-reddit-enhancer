@@ -5,6 +5,9 @@
 // 4. User Link Rewrite
 // 5. Grid View Toggle (columns, compact cards)
 // 6. Hide Promoted Posts
+// 7. Auto-scroll (hands-free feed scrolling with adjustable speed)
+// 8. Redgifs player helper (HD + sound) — only when also injected into the
+//    Redgifs embed frame itself, see initRedgifsFrame
 (function () {
   "use strict";
 
@@ -23,6 +26,36 @@
         localStorage.setItem("re-" + key, value);
       } catch (e) {}
     },
+  };
+
+  // Drawn icons, so they look the same everywhere instead of falling back to
+  // the system's emoji for ▶ and ⏸
+  const icon = (name, shapes) =>
+    `<svg data-icon="${name}" width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">${shapes}</svg>`;
+  const ICONS = {
+    play: icon("play", '<path d="M3 1.3v11.4a.6.6 0 0 0 .9.5l9.2-5.7a.6.6 0 0 0 0-1L3.9.8a.6.6 0 0 0-.9.5Z"/>'),
+    pause: icon("pause", '<rect x="2" y="1" width="3.6" height="12" rx="1"/><rect x="8.4" y="1" width="3.6" height="12" rx="1"/>'),
+    volume: icon("volume", '<path d="M6.6 1.6a.6.6 0 0 1 1 .5v9.8a.6.6 0 0 1-1 .5L3.5 9.5H1.6A.6.6 0 0 1 1 8.9V5.1a.6.6 0 0 1 .6-.6h1.9l3.1-2.9Z"/><path d="M9.4 4.3a.6.6 0 0 1 .9 0 4 4 0 0 1 0 5.4.6.6 0 1 1-.9-.8 2.8 2.8 0 0 0 0-3.8.6.6 0 0 1 0-.8Z"/><path d="M11.2 2.5a.6.6 0 0 1 .9 0 6.6 6.6 0 0 1 0 9 .6.6 0 1 1-.9-.8 5.4 5.4 0 0 0 0-7.4.6.6 0 0 1 0-.8Z"/>'),
+    muted: icon("muted", '<path d="M6.6 1.6a.6.6 0 0 1 1 .5v9.8a.6.6 0 0 1-1 .5L3.5 9.5H1.6A.6.6 0 0 1 1 8.9V5.1a.6.6 0 0 1 .6-.6h1.9l3.1-2.9Z"/><path d="M9.3 5a.6.6 0 0 1 .9 0L11.3 6l1-1a.6.6 0 1 1 .9.8l-1 1.1 1 1.1a.6.6 0 1 1-.9.8l-1-1-1.1 1a.6.6 0 1 1-.9-.8l1.1-1.1-1-1.1a.6.6 0 0 1 0-.8Z"/>'),
+    down: icon("down", '<path d="M7 1a1 1 0 0 1 1 1v7.6l2.8-2.8a1 1 0 1 1 1.4 1.4l-4.5 4.5a1 1 0 0 1-1.4 0L1.8 8.2a1 1 0 1 1 1.4-1.4L6 9.6V2a1 1 0 0 1 1-1Z"/>'),
+  };
+
+  // One volume for everything the script plays: the viewer's own videos and
+  // every Redgifs embed (through the frame helper). 0 means muted.
+  let volume = parseFloat(store.get("volume", "1"));
+  if (!(volume >= 0 && volume <= 1)) volume = 1;
+  const volumeMessage = () => ({
+    source: "reddit-enhancer",
+    event: "volume",
+    volume,
+  });
+
+  const isRedgifsHost = (urlOrOrigin) => {
+    try {
+      return /(^|\.)redgifs\.com$/.test(new URL(urlOrOrigin).hostname);
+    } catch (e) {
+      return false;
+    }
   };
 
   // ==========================================
@@ -97,7 +130,16 @@
         e.stopPropagation();
         iframe.src = iframe.src || redgifsUrl;
       };
+      // A click on the frame itself lands inside Redgifs' player, which opens
+      // the clip on redgifs.com. This transparent cover catches the click on
+      // our side instead, so it opens the fullscreen viewer like other posts.
+      // The bottom strip stays uncovered for the player's own controls.
+      const clickShield = document.createElement("div");
+      clickShield.className = "redgifs-click-shield";
+      clickShield.style.cssText =
+        "position:absolute;inset:0 0 48px 0;z-index:1;cursor:pointer;";
       wrapper.appendChild(iframe);
+      wrapper.appendChild(clickShield);
       wrapper.appendChild(reloadBtn);
       const container =
         embedElement.closest("shreddit-aspect-ratio") ||
@@ -217,12 +259,81 @@
       postOrder.length = 0;
     }
 
-    const SLIDE_SPEEDS = [3, 5, 10, 20];
+    const SLIDE_SPEEDS = [1, 2, 3, 4, 5, 7, 10, 15, 20, 30]; // seconds per post
     let slideshow = false;
     let slideTimer;
     let slideSeconds = parseInt(store.get("slide-seconds", "5")) || 5;
     let shownAt = 0;
     const preloads = []; // keeps preloading <img>s alive until they finish
+
+    // Redgifs play inside an iframe from another site, so the viewer can't see
+    // when a clip ends, and Redgifs' own API refuses requests coming from
+    // reddit.com. Reddit's data for the post usually includes the clip length,
+    // so the slideshow asks Reddit for that instead.
+    const REDGIF_FALLBACK_SECONDS = 15; // used when the length can't be found
+    const REDGIF_LOAD_SECONDS = 2; // head start for the embed to begin playing
+    const clipLengths = new Map(); // postId -> Promise<seconds | null>
+    function getClipLength(post) {
+      if (!post?.permalink) return Promise.resolve(null);
+      if (!clipLengths.has(post.postId)) {
+        const url = post.permalink.replace(/\/?$/, "/") + ".json?raw_json=1";
+        clipLengths.set(
+          post.postId,
+          Promise.resolve()
+            .then(() => fetch(url, { credentials: "include" }))
+            .then((response) => (response.ok ? response.json() : null))
+            .then((json) => {
+              const data = json?.[0]?.data?.children?.[0]?.data;
+              // A crosspost keeps its media details on the original post
+              const candidates = [data, ...(data?.crosspost_parent_list || [])];
+              for (const item of candidates) {
+                const seconds =
+                  item?.preview?.reddit_video_preview?.duration ??
+                  item?.secure_media?.reddit_video?.duration ??
+                  item?.media?.reddit_video?.duration;
+                if (seconds > 0) return seconds;
+              }
+              return null;
+            })
+            .catch(() => null),
+        );
+      }
+      return clipLengths.get(post.postId);
+    }
+
+    // When this script also runs inside the Redgifs frame (see
+    // initRedgifsFrame), the frame reports the moment playback really starts
+    // and the true clip length, which replaces the estimate above.
+    let playStart = { shownAt: 0, at: 0 };
+    window.addEventListener("message", (e) => {
+      if (!isRedgifsHost(e.origin) || e.data?.source !== "reddit-enhancer")
+        return;
+      // Whenever a frame helper speaks up, tell it the current volume
+      e.source?.postMessage(volumeMessage(), e.origin);
+      if (!overlay || e.data.event !== "playing") return;
+      const frame = overlay.querySelector("iframe");
+      if (!frame || e.source !== frame.contentWindow) return;
+      const length = Number(e.data.duration);
+      if (!(length > 0 && length < 3600)) return;
+      const post = postRegistry.get(postOrder[currentIndex]);
+      if (post?.type !== "redgif") return;
+      clipLengths.set(post.postId, Promise.resolve(length));
+      playStart = { shownAt, at: Date.now() };
+      if (slideshow) startSlideTimer(redgifSecondsLeft(length));
+    });
+
+    // How long a redgif stays up, counted from now: whole plays of the clip,
+    // enough of them to cover the chosen slideshow time.
+    function redgifSecondsLeft(length) {
+      const plays = Math.max(1, Math.ceil(slideSeconds / length));
+      // Count from the real start of playback when the frame has reported it
+      const exact = playStart.shownAt === shownAt;
+      const elapsed = (Date.now() - (exact ? playStart.at : shownAt)) / 1000;
+      const left =
+        plays * length + (exact ? 0 : REDGIF_LOAD_SECONDS) - elapsed;
+      // Already past that (slideshow switched on late): finish the current play
+      return left >= 1 ? left : Math.max(1, length - (elapsed % length));
+    }
 
     function getBestSrc(img) {
       const srcset =
@@ -485,6 +596,8 @@
       if (post.type === "gallery") preloadSrc(post.srcs[0]);
       else if (post.type === "image" || post.type === "gif")
         preloadSrc(post.src);
+      // Look the clip length up ahead of time so the slide starts on schedule
+      else if (post.type === "redgif" && slideshow) getClipLength(post);
     }
 
     function preloadSrc(src) {
@@ -517,15 +630,40 @@
       }
     }
 
+    // Thin bar along the top edge that fills up until the next slide
+    function runSlideProgress(seconds) {
+      const bar = document.getElementById("fs-slideshow-progress");
+      if (!bar) return;
+      bar.style.transition = "none";
+      bar.style.width = "0";
+      if (!seconds) return;
+      void bar.offsetWidth; // restart the fill from zero
+      bar.style.transition = `width ${seconds}s linear`;
+      bar.style.width = "100%";
+    }
+
+    function startSlideTimer(seconds) {
+      clearTimeout(slideTimer);
+      slideTimer = setTimeout(advanceSlide, seconds * 1000);
+      runSlideProgress(seconds);
+    }
+
     function scheduleSlide() {
       clearTimeout(slideTimer);
+      runSlideProgress(0);
       if (!overlay || !slideshow) return;
       const post = postRegistry.get(postOrder[currentIndex]);
       if (!post || post.type === "video") return; // videos advance on "ended"
-      // Redgifs can't report when they finish, so give them a longer turn
-      const seconds =
-        post.type === "redgif" ? Math.max(slideSeconds, 15) : slideSeconds;
-      slideTimer = setTimeout(advanceSlide, seconds * 1000);
+      if (post.type !== "redgif") return startSlideTimer(slideSeconds);
+
+      // Start with a safe guess, then switch to the real clip length once
+      // Reddit has answered (if the viewer is still on this post).
+      startSlideTimer(Math.max(slideSeconds, REDGIF_FALLBACK_SECONDS));
+      const shown = shownAt;
+      getClipLength(post).then((length) => {
+        if (!length || !overlay || !slideshow || shownAt !== shown) return;
+        startSlideTimer(redgifSecondsLeft(length));
+      });
     }
 
     function advanceSlide() {
@@ -534,10 +672,20 @@
       else step(1);
     }
 
+    // Reflect slideshow state in the control pill
+    function renderSlideControls() {
+      const play = document.getElementById("fs-slideshow-btn");
+      const speed = document.getElementById("fs-slideshow-speed");
+      if (play) {
+        play.innerHTML = slideshow ? ICONS.pause : ICONS.play;
+        play.style.background = slideshow ? "#ff4500" : "rgba(255,255,255,0.15)";
+      }
+      if (speed) speed.textContent = slideSeconds + "s";
+    }
+
     function toggleSlideshow() {
       slideshow = !slideshow;
-      const btn = document.getElementById("fs-slideshow-btn");
-      if (btn) btn.textContent = slideshow ? "⏸" : "▶";
+      renderSlideControls();
       const video = overlay?.querySelector("video");
       if (video) {
         video.loop = !slideshow;
@@ -549,14 +697,53 @@
       scheduleSlide();
     }
 
-    function cycleSlideSpeed() {
-      const i = SLIDE_SPEEDS.indexOf(slideSeconds);
-      slideSeconds = SLIDE_SPEEDS[(i + 1) % SLIDE_SPEEDS.length];
+    // dir -1 = faster (fewer seconds per post), +1 = slower
+    function changeSlideSpeed(dir) {
+      // The saved value may predate the current steps, so find the nearest one
+      let i = 0;
+      SLIDE_SPEEDS.forEach((seconds, n) => {
+        if (
+          Math.abs(seconds - slideSeconds) <
+          Math.abs(SLIDE_SPEEDS[i] - slideSeconds)
+        )
+          i = n;
+      });
+      i = Math.min(SLIDE_SPEEDS.length - 1, Math.max(0, i + dir));
+      slideSeconds = SLIDE_SPEEDS[i];
       store.set("slide-seconds", slideSeconds);
-      const btn = document.getElementById("fs-slideshow-speed");
-      if (btn) btn.textContent = slideSeconds + "s";
+      renderSlideControls();
       scheduleSlide();
     }
+
+    let volumeBeforeMute = volume || 1;
+
+    function renderVolumeControls() {
+      const btn = document.getElementById("fs-volume-btn");
+      const slider = document.getElementById("fs-volume-slider");
+      if (btn) {
+        btn.innerHTML = volume > 0 ? ICONS.volume : ICONS.muted;
+        btn.title = volume > 0 ? "Mute (M)" : "Unmute (M)";
+      }
+      if (slider) slider.value = Math.round(volume * 100);
+    }
+
+    function setVolume(next) {
+      volume = Math.min(1, Math.max(0, next));
+      if (volume > 0) volumeBeforeMute = volume;
+      store.set("volume", volume);
+      renderVolumeControls();
+      overlay?.querySelectorAll("video").forEach((video) => {
+        video.volume = volume;
+        video.muted = volume === 0;
+      });
+      // Redgifs embeds, in the viewer and in the feed
+      document.querySelectorAll("iframe").forEach((frame) => {
+        if (isRedgifsHost(frame.src))
+          frame.contentWindow?.postMessage(volumeMessage(), "https://www.redgifs.com");
+      });
+    }
+
+    const toggleMute = () => setVolume(volume > 0 ? 0 : volumeBeforeMute);
 
     function show(index) {
       currentIndex = index;
@@ -582,23 +769,80 @@
       close.onclick = destroy;
       overlay.appendChild(close);
 
-      const play = document.createElement("button");
-      play.id = "fs-slideshow-btn";
-      play.textContent = slideshow ? "⏸" : "▶";
-      play.title = "Slideshow (Space)";
-      play.style.cssText =
-        "position:absolute;top:10px;right:48px;background:none;border:none;color:#fff;font-size:18px;cursor:pointer;opacity:0.6;z-index:30;";
-      play.onclick = toggleSlideshow;
-      overlay.appendChild(play);
+      const progress = document.createElement("div");
+      progress.id = "fs-slideshow-progress";
+      progress.style.cssText =
+        "position:absolute;top:0;left:0;height:3px;width:0;background:#ff4500;z-index:31;pointer-events:none;";
+      overlay.appendChild(progress);
 
-      const speed = document.createElement("button");
+      // Slideshow pill: [−] 5s [+] [▶]
+      const pill = document.createElement("div");
+      pill.id = "fs-slideshow";
+      const pillStyle =
+        "display:flex;align-items:center;gap:2px;padding:3px;border-radius:999px;background:rgba(30,30,30,0.75);backdrop-filter:blur(6px);box-shadow:0 1px 6px rgba(0,0,0,0.4);";
+      pill.style.cssText = pillStyle;
+      const pillBtn = (text, title, onClick) => {
+        const b = document.createElement("button");
+        b.textContent = text;
+        b.title = title;
+        b.style.cssText =
+          "width:28px;height:28px;border-radius:50%;border:none;background:transparent;color:#fff;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;";
+        b.onmouseenter = () => {
+          if (b.id !== "fs-slideshow-btn" || !slideshow)
+            b.style.background = "rgba(255,255,255,0.25)";
+        };
+        b.onmouseleave = () => {
+          b.style.background = "transparent";
+          renderSlideControls();
+        };
+        b.onclick = (e) => {
+          e.stopPropagation();
+          onClick();
+        };
+        return b;
+      };
+      const faster = pillBtn("−", "Faster (− key)", () => changeSlideSpeed(-1));
+      const speed = document.createElement("span");
       speed.id = "fs-slideshow-speed";
-      speed.textContent = slideSeconds + "s";
-      speed.title = "Slideshow speed (click to change)";
+      speed.title = "Seconds per post";
       speed.style.cssText =
-        "position:absolute;top:13px;right:80px;background:none;border:none;color:#fff;font-size:13px;cursor:pointer;opacity:0.6;z-index:30;";
-      speed.onclick = cycleSlideSpeed;
-      overlay.appendChild(speed);
+        "min-width:30px;text-align:center;color:#fff;font-size:13px;font-variant-numeric:tabular-nums;user-select:none;";
+      const slower = pillBtn("+", "Slower (+ key)", () => changeSlideSpeed(1));
+      const play = pillBtn("", "Slideshow (Space)", toggleSlideshow);
+      play.id = "fs-slideshow-btn";
+      play.style.marginLeft = "2px";
+      pill.append(faster, speed, slower, play);
+
+      // Volume pill: [speaker] ———o——
+      const volumePill = document.createElement("div");
+      volumePill.id = "fs-volume";
+      volumePill.style.cssText = pillStyle + "padding-right:10px;";
+      const muteBtn = pillBtn("", "", toggleMute);
+      muteBtn.id = "fs-volume-btn";
+      const slider = document.createElement("input");
+      slider.id = "fs-volume-slider";
+      slider.type = "range";
+      slider.min = "0";
+      slider.max = "100";
+      slider.title = "Volume";
+      slider.style.cssText =
+        "width:84px;height:4px;margin:0 0 0 4px;cursor:pointer;accent-color:#ff4500;";
+      slider.oninput = () => setVolume(slider.value / 100);
+      // Arrow keys on the slider change the volume, not the post
+      slider.onkeydown = (e) => e.stopPropagation();
+      // ...and afterwards the viewer's own keys work again
+      slider.onchange = () => slider.blur();
+      slider.onclick = (e) => e.stopPropagation();
+      volumePill.append(muteBtn, slider);
+
+      const controls = document.createElement("div");
+      controls.id = "fs-controls";
+      controls.style.cssText =
+        "position:absolute;top:8px;right:52px;display:flex;align-items:center;gap:8px;z-index:30;font-family:system-ui,sans-serif;";
+      controls.append(volumePill, pill);
+      overlay.appendChild(controls);
+      renderSlideControls();
+      renderVolumeControls();
 
       const bar = document.createElement("div");
       bar.style.cssText =
@@ -666,7 +910,8 @@
         updateGallery();
       } else if (post.type === "redgif") {
         const iframe = document.createElement("iframe");
-        iframe.src = post.src;
+        // The #re-sound marker tells the frame helper to unmute this one
+        iframe.src = post.src.split("#")[0] + "#re-sound";
         iframe.style.cssText =
           "position:absolute;inset:0;width:100vw;height:calc(100vh - 44px);border:none;";
         iframe.allow = "autoplay; fullscreen";
@@ -694,6 +939,8 @@
         video.autoplay = true;
         video.loop = !slideshow;
         video.playsInline = true;
+        video.volume = volume;
+        video.muted = volume === 0;
         // In a slideshow the video plays through (short clips repeat until
         // they have had a full turn), then hands over to the next post.
         video.addEventListener("ended", () => {
@@ -782,6 +1029,9 @@
         toggleSlideshow();
         return;
       }
+      if (e.key === "m" || e.key === "M") return toggleMute();
+      if (e.key === "-" || e.key === "_") return changeSlideSpeed(-1);
+      if (e.key === "+" || e.key === "=") return changeSlideSpeed(1);
       if (e.key === "Escape") destroy();
     }
 
@@ -929,7 +1179,7 @@
     // Keep the FAB button too
     const btn = document.createElement("button");
     btn.textContent = "⛶";
-    btn.title = "Fullscreen viewer (↑↓ posts, ←→ gallery, Space slideshow)";
+    btn.title = "Fullscreen viewer (↑↓ posts, ←→ gallery, Space slideshow, −/+ speed, M mute)";
     btn.style.cssText =
       "position:fixed;bottom:20px;right:20px;z-index:9999;width:44px;height:44px;border-radius:50%;border:none;background:#ff4500;color:#fff;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;justify-content:center;line-height:43px;";
     btn.onclick = open;
@@ -1386,6 +1636,181 @@
   }
 
   // ==========================================
+  // 7. AUTO-SCROLL
+  // ==========================================
+  function initAutoScroll() {
+    const SPEEDS = [20, 40, 70, 110, 170, 260, 400, 600]; // pixels per second
+    let level = parseInt(store.get("autoscroll-level", "3"));
+    if (!(level >= 0 && level < SPEEDS.length)) level = 3;
+    let running = false;
+    let lastTime = 0;
+    let carry = 0; // fraction of a pixel left over from the previous frame
+
+    const wrap = document.createElement("div");
+    wrap.id = "auto-scroll";
+    wrap.style.cssText =
+      "position:fixed;bottom:74px;right:20px;z-index:9999;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:system-ui,sans-serif;";
+
+    // Speed pill, only shown while scrolling: [+] level [−]
+    const pill = document.createElement("div");
+    pill.style.cssText =
+      "display:none;flex-direction:column;align-items:center;gap:2px;padding:3px;border-radius:999px;background:rgba(30,30,30,0.85);box-shadow:0 2px 8px rgba(0,0,0,0.3);";
+    const pillBtn = (text, title, dir) => {
+      const b = document.createElement("button");
+      b.textContent = text;
+      b.title = title;
+      b.style.cssText =
+        "width:30px;height:30px;border-radius:50%;border:none;background:transparent;color:#fff;font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;";
+      b.onmouseenter = () => (b.style.background = "rgba(255,255,255,0.25)");
+      b.onmouseleave = () => (b.style.background = "transparent");
+      b.onclick = () => setLevel(level + dir);
+      return b;
+    };
+    const label = document.createElement("span");
+    label.title = "Scroll speed";
+    label.style.cssText =
+      "color:#fff;font-size:12px;font-variant-numeric:tabular-nums;user-select:none;";
+    pill.append(pillBtn("+", "Faster", 1), label, pillBtn("−", "Slower", -1));
+
+    const btn = document.createElement("button");
+    btn.id = "auto-scroll-btn";
+    btn.style.cssText =
+      "width:44px;height:44px;border-radius:50%;border:none;background:#ff4500;color:#fff;font-size:18px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;justify-content:center;align-items:center;";
+
+    function render() {
+      btn.innerHTML = running ? ICONS.pause : ICONS.down;
+      btn.title = running ? "Stop auto-scroll" : "Auto-scroll the page";
+      pill.style.display = running ? "flex" : "none";
+      label.textContent = `${level + 1}/${SPEEDS.length}`;
+    }
+
+    function setLevel(next) {
+      level = Math.min(SPEEDS.length - 1, Math.max(0, next));
+      store.set("autoscroll-level", level);
+      render();
+    }
+
+    function tick(now) {
+      if (!running) return;
+      const elapsed = Math.min(now - lastTime, 100); // don't leap after a stall
+      lastTime = now;
+      // Hold still while the fullscreen viewer is covering the feed
+      if (!document.getElementById("fs-post-counter")) {
+        carry += (SPEEDS[level] * elapsed) / 1000;
+        const whole = Math.floor(carry);
+        if (whole > 0) {
+          carry -= whole;
+          window.scrollBy({ top: whole, behavior: "instant" });
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+
+    btn.onclick = () => {
+      running = !running;
+      render();
+      if (running) {
+        lastTime = performance.now();
+        carry = 0;
+        requestAnimationFrame(tick);
+      }
+    };
+
+    wrap.append(pill, btn);
+    document.body.appendChild(wrap);
+    render();
+  }
+
+  // ==========================================
+  // 8. REDGIFS PLAYER HELPER (runs inside the embed frame)
+  // ==========================================
+  // The Redgifs player always starts muted and in SD, and takes no option to
+  // change that from outside: the only way is to press its own buttons, which
+  // a script on reddit.com cannot reach. This part therefore only does
+  // anything when the injector is also set up to run this file on
+  // https://www.redgifs.com/ifr/* (in frames).
+  function initRedgifsFrame() {
+    // Sound only where the viewer asked for it; feed embeds stay quiet
+    const wantSound = location.hash.includes("re-sound");
+    let hdDone = false;
+    let soundDone = !wantSound;
+
+    function apply() {
+      const video = document.querySelector("video");
+      if (!video) return;
+      if (!hdDone) {
+        // The player starts in SD, so one press of the quality button is HD
+        const quality = document.querySelector(".gifQualityButton");
+        if (!quality) return;
+        hdDone = true;
+        quality.click();
+        return; // let the HD stream load before touching sound
+      }
+      if (!soundDone) {
+        const sound = document.querySelector('.SoundButton[aria-label="Sound Off"]');
+        if (!sound) return; // not there yet, or the clip has no audio
+        soundDone = true;
+        sound.click();
+        // Browsers pause a clip that is unmuted without their blessing; if
+        // that happens, go back to muted so it keeps playing.
+        setTimeout(() => {
+          if (!video.paused) return;
+          document.querySelector('.SoundButton[aria-label="Sound On"]')?.click();
+          video.play().catch(() => {});
+        }, 500);
+      }
+    }
+
+    // The Reddit page owns the volume setting; ask for it and keep the
+    // player's video at whatever it says.
+    let wantedVolume = null;
+    const applyVolume = () => {
+      const video = document.querySelector("video");
+      if (video && wantedVolume !== null) video.volume = wantedVolume;
+    };
+    window.addEventListener("message", (e) => {
+      let fromReddit = false;
+      try {
+        fromReddit = /(^|\.)reddit\.com$/.test(new URL(e.origin).hostname);
+      } catch (err) {}
+      if (!fromReddit || e.data?.source !== "reddit-enhancer") return;
+      if (e.data.event !== "volume") return;
+      const next = Number(e.data.volume);
+      if (!(next >= 0 && next <= 1)) return;
+      wantedVolume = next;
+      applyVolume();
+    });
+    if (window.parent !== window)
+      window.parent.postMessage({ source: "reddit-enhancer", event: "hello" }, "*");
+
+    const observer = new MutationObserver(() => {
+      apply();
+      if (hdDone && soundDone) observer.disconnect();
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    apply();
+    // The sound button never appears for silent clips, so stop looking
+    setTimeout(() => observer.disconnect(), 20000);
+
+    // Tell the page each time playback (re)starts, with the true clip length,
+    // so its slideshow can wait for exactly one play.
+    document.addEventListener(
+      "playing",
+      (e) => {
+        apply();
+        applyVolume();
+        const duration = e.target?.duration;
+        if (window.parent === window || !(duration > 0)) return;
+        window.parent.postMessage(
+          { source: "reddit-enhancer", event: "playing", duration },
+          "*",
+        );
+      },
+      true,
+    );
+  }
+
+  // ==========================================
   // INIT ALL
   // ==========================================
   function init() {
@@ -1395,11 +1820,17 @@
     initUserLinkRewrite();
     initGridToggle();
     initHidePromoted();
+    initAutoScroll();
   }
 
+  // Inside a Redgifs embed frame only the player helper applies
+  const inRedgifsFrame = isRedgifsHost(location.href);
+  if (inRedgifsFrame && !location.pathname.startsWith("/ifr/")) return;
+  const start = inRedgifsFrame ? initRedgifsFrame : init;
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", start);
   } else {
-    init();
+    start();
   }
 })();
