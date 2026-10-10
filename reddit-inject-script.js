@@ -1,6 +1,6 @@
 // Reddit Enhancements - Combined Script
 // 1. RedGifs Embed Fix
-// 2. Auto-close Left Sidebar
+// 2. Right Sidebar Toggle
 // 3. Fullscreen Post Viewer (click image to open, slideshow)
 // 4. User Link Rewrite
 // 5. Grid View Toggle (columns, compact cards)
@@ -33,11 +33,30 @@
   const icon = (name, shapes) =>
     `<svg data-icon="${name}" width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">${shapes}</svg>`;
   const ICONS = {
-    play: icon("play", '<path d="M3 1.3v11.4a.6.6 0 0 0 .9.5l9.2-5.7a.6.6 0 0 0 0-1L3.9.8a.6.6 0 0 0-.9.5Z"/>'),
-    pause: icon("pause", '<rect x="2" y="1" width="3.6" height="12" rx="1"/><rect x="8.4" y="1" width="3.6" height="12" rx="1"/>'),
-    volume: icon("volume", '<path d="M6.6 1.6a.6.6 0 0 1 1 .5v9.8a.6.6 0 0 1-1 .5L3.5 9.5H1.6A.6.6 0 0 1 1 8.9V5.1a.6.6 0 0 1 .6-.6h1.9l3.1-2.9Z"/><path d="M9.4 4.3a.6.6 0 0 1 .9 0 4 4 0 0 1 0 5.4.6.6 0 1 1-.9-.8 2.8 2.8 0 0 0 0-3.8.6.6 0 0 1 0-.8Z"/><path d="M11.2 2.5a.6.6 0 0 1 .9 0 6.6 6.6 0 0 1 0 9 .6.6 0 1 1-.9-.8 5.4 5.4 0 0 0 0-7.4.6.6 0 0 1 0-.8Z"/>'),
-    muted: icon("muted", '<path d="M6.6 1.6a.6.6 0 0 1 1 .5v9.8a.6.6 0 0 1-1 .5L3.5 9.5H1.6A.6.6 0 0 1 1 8.9V5.1a.6.6 0 0 1 .6-.6h1.9l3.1-2.9Z"/><path d="M9.3 5a.6.6 0 0 1 .9 0L11.3 6l1-1a.6.6 0 1 1 .9.8l-1 1.1 1 1.1a.6.6 0 1 1-.9.8l-1-1-1.1 1a.6.6 0 1 1-.9-.8l1.1-1.1-1-1.1a.6.6 0 0 1 0-.8Z"/>'),
-    down: icon("down", '<path d="M7 1a1 1 0 0 1 1 1v7.6l2.8-2.8a1 1 0 1 1 1.4 1.4l-4.5 4.5a1 1 0 0 1-1.4 0L1.8 8.2a1 1 0 1 1 1.4-1.4L6 9.6V2a1 1 0 0 1 1-1Z"/>'),
+    play: icon(
+      "play",
+      '<path d="M3 1.3v11.4a.6.6 0 0 0 .9.5l9.2-5.7a.6.6 0 0 0 0-1L3.9.8a.6.6 0 0 0-.9.5Z"/>',
+    ),
+    pause: icon(
+      "pause",
+      '<rect x="2" y="1" width="3.6" height="12" rx="1"/><rect x="8.4" y="1" width="3.6" height="12" rx="1"/>',
+    ),
+    volume: icon(
+      "volume",
+      '<path d="M6.6 1.6a.6.6 0 0 1 1 .5v9.8a.6.6 0 0 1-1 .5L3.5 9.5H1.6A.6.6 0 0 1 1 8.9V5.1a.6.6 0 0 1 .6-.6h1.9l3.1-2.9Z"/><path d="M9.4 4.3a.6.6 0 0 1 .9 0 4 4 0 0 1 0 5.4.6.6 0 1 1-.9-.8 2.8 2.8 0 0 0 0-3.8.6.6 0 0 1 0-.8Z"/><path d="M11.2 2.5a.6.6 0 0 1 .9 0 6.6 6.6 0 0 1 0 9 .6.6 0 1 1-.9-.8 5.4 5.4 0 0 0 0-7.4.6.6 0 0 1 0-.8Z"/>',
+    ),
+    muted: icon(
+      "muted",
+      '<path d="M6.6 1.6a.6.6 0 0 1 1 .5v9.8a.6.6 0 0 1-1 .5L3.5 9.5H1.6A.6.6 0 0 1 1 8.9V5.1a.6.6 0 0 1 .6-.6h1.9l3.1-2.9Z"/><path d="M9.3 5a.6.6 0 0 1 .9 0L11.3 6l1-1a.6.6 0 1 1 .9.8l-1 1.1 1 1.1a.6.6 0 1 1-.9.8l-1-1-1.1 1a.6.6 0 1 1-.9-.8l1.1-1.1-1-1.1a.6.6 0 0 1 0-.8Z"/>',
+    ),
+    chevron: icon(
+      "chevron",
+      '<path d="M9.7 1.3a1 1 0 0 1 0 1.4L5.4 7l4.3 4.3a1 1 0 1 1-1.4 1.4l-5-5a1 1 0 0 1 0-1.4l5-5a1 1 0 0 1 1.4 0Z"/>',
+    ),
+    down: icon(
+      "down",
+      '<path d="M7 1a1 1 0 0 1 1 1v7.6l2.8-2.8a1 1 0 1 1 1.4 1.4l-4.5 4.5a1 1 0 0 1-1.4 0L1.8 8.2a1 1 0 1 1 1.4-1.4L6 9.6V2a1 1 0 0 1 1-1Z"/>',
+    ),
   };
 
   // One volume for everything the script plays: the viewer's own videos and
@@ -178,62 +197,73 @@
   }
 
   // ==========================================
-  // 2. AUTO-CLOSE LEFT SIDEBAR
+  // 2. RIGHT SIDEBAR TOGGLE
   // ==========================================
-  function initSidebarClose() {
-    function closeNav() {
-      const navContainer = document.querySelector("#left-sidebar-container");
-      const gridContainer = document.querySelector(".grid-container");
-      if (!navContainer || !gridContainer) return false;
-      navContainer.style.transition = "none";
-      gridContainer.style.transition = "none";
-      navContainer.setAttribute("expanded", "0");
-      gridContainer.classList.remove("flex-nav-expanded");
-      gridContainer.classList.add("flex-nav-collapsed");
-      return true;
+  // Like Reddit's left sidebar. Collapsed, the sidebar floats off-screen with
+  // only a thin rail showing at the right edge, the arrow button hanging off
+  // its top; hovering glides rail and sidebar in together as one panel over
+  // the page (the stylesheet does the sliding). The arrow puts the sidebar back
+  // in the page beside the feed; the rail then turns see-through and only the
+  // button is left in the top right corner. That pinned state lives on
+  // <html>, so it survives Reddit replacing the sidebar element on navigation.
+  function initRightSidebarToggle() {
+    let open = store.get("right-sidebar", "0") === "1";
+
+    const rail = document.createElement("div");
+    rail.id = "right-sidebar-rail";
+    rail.style.cssText =
+      "position:fixed;top:56px;right:0;bottom:0;z-index:10;width:16px;box-sizing:border-box;border-left:1px solid var(--color-neutral-border-weak, #2a3236);background:var(--color-neutral-background, #0e1113);";
+
+    const btn = document.createElement("button");
+    btn.id = "right-sidebar-btn";
+    btn.innerHTML = ICONS.chevron;
+    btn.style.cssText =
+      "position:absolute;top:12px;right:0px;width:32px;height:32px;padding:0;border-radius:50%;border:1px solid var(--color-neutral-border, #3e4142);background:var(--color-neutral-background, #0e1113);color:var(--color-secondary-onBackground, #fff);cursor:pointer;display:flex;justify-content:center;align-items:center;";
+    rail.appendChild(btn);
+
+    // Reddit hides the sidebar altogether on narrow windows; the rail goes
+    // with it. (Pages with no sidebar at all are handled by the stylesheet.)
+    function syncRail() {
+      const sidebar = document.getElementById("right-sidebar-container");
+      const hidden = sidebar && getComputedStyle(sidebar).display === "none";
+      rail.style.display = hidden ? "none" : "block";
     }
 
-    let sidebarObserver, gridObserver;
-    function watchSidebar() {
-      const navContainer = document.querySelector("#left-sidebar-container");
-      const gridContainer = document.querySelector(".grid-container");
-      if (!navContainer || !gridContainer) return;
-      if (sidebarObserver) sidebarObserver.disconnect();
-      sidebarObserver = new MutationObserver(() => {
-        if (navContainer.getAttribute("expanded") !== "0") closeNav();
-      });
-      sidebarObserver.observe(navContainer, {
-        attributes: true,
-        attributeFilter: ["expanded"],
-      });
-      if (gridObserver) gridObserver.disconnect();
-      gridObserver = new MutationObserver(() => {
-        if (gridContainer.classList.contains("flex-nav-expanded")) closeNav();
-      });
-      gridObserver.observe(gridContainer, {
-        attributes: true,
-        attributeFilter: ["class"],
-      });
+    // Slid out over the page while the pointer is on the rail or the sidebar.
+    // The arrow button changes nothing either way, so it holds still under
+    // the pointer and can be clicked.
+    const setPeek = (on) =>
+      document.documentElement.classList.toggle("re-right-sidebar-peek", on);
+    document.addEventListener("mouseover", (e) => {
+      const target = e.target;
+      if (!(target instanceof Element) || target.closest("#right-sidebar-btn"))
+        return;
+      setPeek(
+        !open &&
+          !!target.closest("#right-sidebar-rail, #right-sidebar-container"),
+      );
+    });
+    document.documentElement.addEventListener("mouseleave", () =>
+      setPeek(false),
+    );
+
+    function render() {
+      document.documentElement.classList.toggle("re-right-sidebar-open", open);
+      setPeek(false);
+      btn.firstElementChild.style.transform = open ? "rotate(180deg)" : "";
+      btn.title = open ? "Collapse sidebar" : "Keep sidebar open";
+      syncRail();
     }
 
-    function pollAndWatch(duration = 3000, interval = 200) {
-      const end = Date.now() + duration;
-      function tick() {
-        if (closeNav()) watchSidebar();
-        if (Date.now() < end) setTimeout(tick, interval);
-      }
-      tick();
-    }
+    btn.onclick = () => {
+      open = !open;
+      store.set("right-sidebar", open ? "1" : "0");
+      render();
+    };
 
-    pollAndWatch();
-    let lastUrl = location.href;
-    new MutationObserver(() => {
-      const url = location.href;
-      if (url !== lastUrl) {
-        lastUrl = url;
-        pollAndWatch();
-      }
-    }).observe(document, { subtree: true, childList: true });
+    window.addEventListener("resize", syncRail);
+    document.body.appendChild(rail);
+    render();
   }
 
   // ==========================================
@@ -329,8 +359,7 @@
       // Count from the real start of playback when the frame has reported it
       const exact = playStart.shownAt === shownAt;
       const elapsed = (Date.now() - (exact ? playStart.at : shownAt)) / 1000;
-      const left =
-        plays * length + (exact ? 0 : REDGIF_LOAD_SECONDS) - elapsed;
+      const left = plays * length + (exact ? 0 : REDGIF_LOAD_SECONDS) - elapsed;
       // Already past that (slideshow switched on late): finish the current play
       return left >= 1 ? left : Math.max(1, length - (elapsed % length));
     }
@@ -678,7 +707,9 @@
       const speed = document.getElementById("fs-slideshow-speed");
       if (play) {
         play.innerHTML = slideshow ? ICONS.pause : ICONS.play;
-        play.style.background = slideshow ? "#ff4500" : "rgba(255,255,255,0.15)";
+        play.style.background = slideshow
+          ? "#ff4500"
+          : "rgba(255,255,255,0.15)";
       }
       if (speed) speed.textContent = slideSeconds + "s";
     }
@@ -739,7 +770,10 @@
       // Redgifs embeds, in the viewer and in the feed
       document.querySelectorAll("iframe").forEach((frame) => {
         if (isRedgifsHost(frame.src))
-          frame.contentWindow?.postMessage(volumeMessage(), "https://www.redgifs.com");
+          frame.contentWindow?.postMessage(
+            volumeMessage(),
+            "https://www.redgifs.com",
+          );
       });
     }
 
@@ -1179,7 +1213,8 @@
     // Keep the FAB button too
     const btn = document.createElement("button");
     btn.textContent = "⛶";
-    btn.title = "Fullscreen viewer (↑↓ posts, ←→ gallery, Space slideshow, −/+ speed, M mute)";
+    btn.title =
+      "Fullscreen viewer (↑↓ posts, ←→ gallery, Space slideshow, −/+ speed, M mute)";
     btn.style.cssText =
       "position:fixed;bottom:20px;right:20px;z-index:9999;width:44px;height:44px;border-radius:50%;border:none;background:#ff4500;color:#fff;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;justify-content:center;line-height:43px;";
     btn.onclick = open;
@@ -1314,7 +1349,8 @@
 			display: none;
 		}
 		shreddit-feed.grid-compact shreddit-post:has([slot="post-media-container"]) > .grid-post-meta {
-			display: block;
+			display: flex;
+			gap: 10px;
 			position: absolute;
 			bottom: 0;
 			left: 0;
@@ -1325,12 +1361,21 @@
 			font-size: 12px;
 			line-height: 1.3;
 			white-space: nowrap;
-			overflow: hidden;
-			text-overflow: ellipsis;
 			background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
 			opacity: 0;
 			transition: opacity 0.15s;
 			pointer-events: none;
+		}
+		/* Subreddit/author take the room that's left; "View post" keeps the right corner */
+		.grid-post-meta > span {
+			flex: 1;
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.grid-post-meta > a {
+			flex: none;
+			font-weight: 600;
 		}
 		.grid-post-meta a {
 			color: #fff !important;
@@ -1478,30 +1523,42 @@
       return user ? `/user/${user[1]}/submitted/` : `/${name}/`;
     }
 
-    // Subreddit + author links shown along the bottom of a compact tile
+    function metaLink(label, href) {
+      const a = document.createElement("a");
+      a.href = href;
+      a.target = "_blank";
+      a.textContent = label;
+      // Keep the click from also opening the post underneath
+      a.onclick = (e) => e.stopPropagation();
+      return a;
+    }
+
+    // Subreddit + author links and a "View post" link shown along the bottom
+    // of a compact tile
     function addPostMeta(post) {
       if (post.querySelector(":scope > .grid-post-meta")) return;
       const subreddit = post.getAttribute("subreddit-prefixed-name");
       const author = post.getAttribute("author");
+      const permalink = post.getAttribute("permalink");
       const links = [];
       if (subreddit)
-        links.push([subreddit.replace(/^u_/, "u/"), profileOrSubredditHref(subreddit)]);
+        links.push([
+          subreddit.replace(/^u_/, "u/"),
+          profileOrSubredditHref(subreddit),
+        ]);
       // (a profile post's "subreddit" is the author, so don't list them twice)
       if (author && author !== "[deleted]" && subreddit !== `u_${author}`)
         links.push([`u/${author}`, `/user/${author}/submitted/`]);
-      if (!links.length) return;
+      if (!links.length && !permalink) return;
       const meta = document.createElement("div");
       meta.className = "grid-post-meta";
+      const names = document.createElement("span");
       links.forEach(([label, href], i) => {
-        if (i) meta.append("  ·  ");
-        const a = document.createElement("a");
-        a.href = href;
-        a.target = "_blank";
-        a.textContent = label;
-        // Keep the click from also opening the post underneath
-        a.onclick = (e) => e.stopPropagation();
-        meta.appendChild(a);
+        if (i) names.append("  ·  ");
+        names.appendChild(metaLink(label, href));
       });
+      meta.appendChild(names);
+      if (permalink) meta.appendChild(metaLink("View post", permalink));
       post.appendChild(meta);
     }
 
@@ -1532,8 +1589,11 @@
       const limit = isGrid ? tallestSingleMediaRatio(feed) : 0;
       galleries.forEach((gallery) => {
         if (isGrid) {
-          const img = gallery.querySelector('li img:not([role="presentation"])');
-          const ratio = img?.getAttribute("height") / img?.getAttribute("width");
+          const img = gallery.querySelector(
+            'li img:not([role="presentation"])',
+          );
+          const ratio =
+            img?.getAttribute("height") / img?.getAttribute("width");
           if (ratio > 0) {
             const value = Math.min(ratio, limit).toFixed(3);
             if (gallery.style.getPropertyValue("--re-gallery-ratio") !== value)
@@ -1747,7 +1807,9 @@
         return; // let the HD stream load before touching sound
       }
       if (!soundDone) {
-        const sound = document.querySelector('.SoundButton[aria-label="Sound Off"]');
+        const sound = document.querySelector(
+          '.SoundButton[aria-label="Sound Off"]',
+        );
         if (!sound) return; // not there yet, or the clip has no audio
         soundDone = true;
         sound.click();
@@ -1755,7 +1817,9 @@
         // that happens, go back to muted so it keeps playing.
         setTimeout(() => {
           if (!video.paused) return;
-          document.querySelector('.SoundButton[aria-label="Sound On"]')?.click();
+          document
+            .querySelector('.SoundButton[aria-label="Sound On"]')
+            ?.click();
           video.play().catch(() => {});
         }, 500);
       }
@@ -1781,13 +1845,19 @@
       applyVolume();
     });
     if (window.parent !== window)
-      window.parent.postMessage({ source: "reddit-enhancer", event: "hello" }, "*");
+      window.parent.postMessage(
+        { source: "reddit-enhancer", event: "hello" },
+        "*",
+      );
 
     const observer = new MutationObserver(() => {
       apply();
       if (hdDone && soundDone) observer.disconnect();
     });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
     apply();
     // The sound button never appears for silent clips, so stop looking
     setTimeout(() => observer.disconnect(), 20000);
@@ -1815,7 +1885,7 @@
   // ==========================================
   function init() {
     initRedgifsFix();
-    initSidebarClose();
+    initRightSidebarToggle();
     initFullscreenViewer();
     initUserLinkRewrite();
     initGridToggle();

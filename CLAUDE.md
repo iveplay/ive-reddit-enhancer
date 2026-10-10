@@ -6,16 +6,16 @@ Vanilla JS + CSS content scripts injected into Reddit's new UI (Shreddit). No bu
 
 ```
 reddit-inject-script.js   # Main script — all 8 features in one IIFE
-reddit-inject.css          # Layout overrides (full-width, sidebar hover-reveal)
+reddit-inject.css          # Layout overrides (full-width, right sidebar collapsed behind a rail until hovered or pinned)
 ```
 
 ## Features (in script order)
 
 1. **RedGifs Embed Fix** — replaces broken `<shreddit-embed>` with working iframes, adds reload button
-2. **Auto-close Left Sidebar** — collapses `#left-sidebar-container` via class toggle + MutationObserver
+2. **Right Sidebar Toggle** — collapsed, `#right-sidebar-container` is `position: fixed` just past the right edge, with a 16px rail (`#right-sidebar-rail`, the arrow button hanging off its top, 8px from the rail's right edge) as its visible strip; hovering glides rail and sidebar in together over the page (the script sets `.re-right-sidebar-peek` on `<html>` from a document `mouseover` handler; hovering the arrow button itself leaves the state alone so it can be clicked). The arrow pins the sidebar back into the page beside the feed (toggles `.re-right-sidebar-open` on `<html>`); pinned, the rail is see-through so only the button shows, still in the top right corner. The left sidebar is left to Reddit's own collapse button
 3. **Fullscreen Post Viewer** — overlay for images/videos/galleries/redgifs with keyboard/wheel nav (↑↓←→ Esc), slideshow (Space; −/+ keys or the pill at the top right change seconds per post; progress bar along the top), post title in the bottom bar, preloads neighbouring images, auto-loads more posts near end of feed, resets its post list when the URL changes
 4. **User Link Rewrite** — rewrites `/user/x` → `/user/x/submitted/`
-5. **Grid View Toggle** — grid layout via floating button, with a column-count button (2–6) and a compact-cards button (media only, title on hover)
+5. **Grid View Toggle** — grid layout via floating button, with a column-count button (2–6) and a compact-cards button (media only; title, subreddit/author links and a "View post" link on hover)
 6. **Hide Promoted Posts** — CSS-only, hides `<shreddit-ad-post>` and related ad elements; the viewer skips them too
 7. **Auto-scroll** — floating button above the viewer button scrolls the feed hands-free; a speed pill (8 levels) appears while it runs, and it holds still while the fullscreen viewer is open
 
@@ -25,9 +25,9 @@ reddit-inject.css          # Layout overrides (full-width, sidebar hover-reveal)
 
 - Targets Reddit's custom elements: `<shreddit-post>`, `<shreddit-feed>`, `<shreddit-embed>`, `<gallery-carousel>`
 - Relies on data attributes: `post-type`, `content-href`, `permalink`, `author`, `subreddit-prefixed-name`
-- MutationObserver-heavy — watches feed, sidebar, and embeds for dynamic changes
+- MutationObserver-heavy — watches feed and embeds for dynamic changes
 - Styles injected via `document.createElement("style")` appended to `<head>`
-- Settings persist in `localStorage` under `re-*` keys (`re-grid`, `re-grid-cols`, `re-grid-compact`, `re-slide-seconds`, `re-autoscroll-level`, `re-volume`) via the `store` helper
+- Settings persist in `localStorage` under `re-*` keys (`re-grid`, `re-grid-cols`, `re-grid-compact`, `re-slide-seconds`, `re-autoscroll-level`, `re-volume`, `re-right-sidebar`) via the `store` helper
 - Grid placeholders: flat feeds (home, custom feeds — posts are direct children of the feed) get one placeholder per post, kept in its own cell via `.grid-home`; batched feeds get full-width placeholders
 - Compact cards hide the vote row by appending a `<style data-grid-compact>` into each post's shadow root
 - Slideshow timing for redgifs: the embed is a cross-origin iframe and `api.redgifs.com` rejects requests from reddit.com (CORS), so the clip length comes from Reddit's own `<permalink>.json` (`preview.reddit_video_preview.duration`, also checked on `crosspost_parent_list`); falls back to 15s when that is missing
@@ -45,5 +45,5 @@ Not a standalone extension — requires a host to inject into Reddit pages (brow
 - No build step — edit files directly
 - `"use strict"` at top of script
 - Each feature is a self-contained function called from the main init block
-- CSS classes/IDs used: `.redgifs-wrapper`, `.redgifs-reload-btn`, `.grid-view`, `.grid-home`, `.grid-compact`, `#fs-gallery`, `#fs-post-counter`, `#fs-controls`, `#fs-volume`, `#fs-volume-btn`, `#fs-volume-slider`, `#fs-slideshow`, `#fs-slideshow-btn`, `#fs-slideshow-speed`, `#fs-slideshow-progress`, `#auto-scroll`, `#auto-scroll-btn`, `.grid-post-meta`, `#grid-toggle-btn`, `#grid-cols-btn`, `#grid-compact-btn`
+- CSS classes/IDs used: `.redgifs-wrapper`, `.redgifs-reload-btn`, `.grid-view`, `.grid-home`, `.grid-compact`, `#fs-gallery`, `#fs-post-counter`, `#fs-controls`, `#fs-volume`, `#fs-volume-btn`, `#fs-volume-slider`, `#fs-slideshow`, `#fs-slideshow-btn`, `#fs-slideshow-speed`, `#fs-slideshow-progress`, `#auto-scroll`, `#auto-scroll-btn`, `.grid-post-meta`, `#grid-toggle-btn`, `#grid-cols-btn`, `#grid-compact-btn`, `#right-sidebar-rail`, `#right-sidebar-btn`, `.re-right-sidebar-open`, `.re-right-sidebar-peek`
 - Author: Diemas (info@diemas.dev)
