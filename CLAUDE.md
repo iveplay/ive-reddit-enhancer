@@ -31,6 +31,7 @@ reddit-inject.css          # Layout overrides (full-width, right sidebar collaps
 - Grid placeholders: flat feeds (home, custom feeds — posts are direct children of the feed) get one placeholder per post, kept in its own cell via `.grid-home`; batched feeds get full-width placeholders
 - Compact cards hide the vote row by appending a `<style data-grid-compact>` into each post's shadow root
 - Slideshow timing for redgifs: the embed is a cross-origin iframe and `api.redgifs.com` rejects requests from reddit.com (CORS), so the clip length comes from Reddit's own `<permalink>.json` (`preview.reddit_video_preview.duration`, also checked on `crosspost_parent_list`); falls back to 15s when that is missing
+- Slideshow timing for GIF images: an `<img>` has no "ended" event, so the viewer fetches the file and adds up its frame delays (`gifSeconds`), then shows it for whole plays covering the chosen seconds, counted from the image's `load`. Falls back to the plain timer when the file is not an animated GIF or the fetch is blocked
 - Volume: one global `volume` (0–1, saved as `re-volume`) owned by the Reddit page. The viewer's slider/`M` key set it on its own `<video>`s and post `{source:"reddit-enhancer", event:"volume"}` to every Redgifs iframe; the frame helper sends `hello`/`playing` and always gets the current volume back
 - Entry point: IIFE that waits for DOMContentLoaded or runs immediately
 

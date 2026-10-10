@@ -364,6 +364,71 @@
       return left >= 1 ? left : Math.max(1, length - (elapsed % length));
     }
 
+    // An <img> never says when its GIF has played through, so the file itself
+    // is read: adding up the delay of every frame gives the length of one play.
+    const GIF_LOAD_SECONDS = 15; // longest wait for a GIF to load and be measured
+    const gifLengths = new Map(); // src -> Promise<seconds | null>
+    function getGifLength(src) {
+      if (!gifLengths.has(src)) {
+        gifLengths.set(
+          src,
+          fetch(src)
+            .then((response) => (response.ok ? response.arrayBuffer() : null))
+            .then((buffer) => buffer && gifSeconds(buffer))
+            .catch(() => null),
+        );
+      }
+      return gifLengths.get(src);
+    }
+
+    // Length of one play of a GIF file; null for a still image or another format
+    function gifSeconds(buffer) {
+      const b = new Uint8Array(buffer);
+      if (b.length < 13 || String.fromCharCode(b[0], b[1], b[2]) !== "GIF")
+        return null;
+      const tableSize = (flags) => (flags & 0x80 ? 3 << ((flags & 7) + 1) : 0);
+      let i = 13 + tableSize(b[10]);
+      const skipBlocks = () => {
+        while (i < b.length && b[i]) i += b[i] + 1;
+        i++;
+      };
+      let frames = 0;
+      let centiseconds = 0;
+      let delay = 0;
+      while (i < b.length) {
+        const kind = b[i++];
+        if (kind === 0x21) {
+          // Extension; the graphic control one carries the next frame's delay
+          if (b[i++] === 0xf9) delay = b[i + 2] | (b[i + 3] << 8);
+          skipBlocks();
+        } else if (kind === 0x2c) {
+          // Image: descriptor, optional colour table, code size, pixel data
+          i += 9;
+          i += tableSize(b[i - 1]) + 1;
+          skipBlocks();
+          frames++;
+          // Browsers play delays under 20ms as 100ms
+          centiseconds += delay < 2 ? 10 : delay;
+          delay = 0;
+        } else break;
+      }
+      return frames > 1 ? centiseconds / 100 : null;
+    }
+
+    // The moment the image on screen finished loading (when its GIF starts)
+    let gifShown = { img: null, src: "", at: null };
+    function gifShownAt(img) {
+      if (gifShown.img !== img || gifShown.src !== img.src) {
+        const at = new Promise((resolve) => {
+          const done = () => resolve(Date.now());
+          if (img.complete && img.naturalWidth) done();
+          else img.addEventListener("load", done, { once: true });
+        });
+        gifShown = { img, src: img.src, at };
+      }
+      return gifShown.at;
+    }
+
     function getBestSrc(img) {
       const srcset =
         img.getAttribute("srcset") || img.getAttribute("data-lazy-srcset");
@@ -683,16 +748,41 @@
       if (!overlay || !slideshow) return;
       const post = postRegistry.get(postOrder[currentIndex]);
       if (!post || post.type === "video") return; // videos advance on "ended"
-      if (post.type !== "redgif") return startSlideTimer(slideSeconds);
-
-      // Start with a safe guess, then switch to the real clip length once
-      // Reddit has answered (if the viewer is still on this post).
-      startSlideTimer(Math.max(slideSeconds, REDGIF_FALLBACK_SECONDS));
       const shown = shownAt;
-      getClipLength(post).then((length) => {
-        if (!length || !overlay || !slideshow || shownAt !== shown) return;
-        startSlideTimer(redgifSecondsLeft(length));
-      });
+      if (post.type === "redgif") {
+        // Start with a safe guess, then switch to the real clip length once
+        // Reddit has answered (if the viewer is still on this post).
+        startSlideTimer(Math.max(slideSeconds, REDGIF_FALLBACK_SECONDS));
+        getClipLength(post).then((length) => {
+          if (!length || !overlay || !slideshow || shownAt !== shown) return;
+          startSlideTimer(redgifSecondsLeft(length));
+        });
+        return;
+      }
+
+      const img = overlay.querySelector("img");
+      if (!img || !img.src.includes(".gif"))
+        return startSlideTimer(slideSeconds);
+
+      // A GIF stays up for whole plays, enough of them to cover the chosen
+      // slideshow time. Wait for it to load and be measured first.
+      const src = img.src;
+      startSlideTimer(Math.max(slideSeconds, GIF_LOAD_SECONDS));
+      Promise.all([getGifLength(src), gifShownAt(img)]).then(
+        ([length, startedAt]) => {
+          if (!overlay || !slideshow || shownAt !== shown || img.src !== src)
+            return;
+          const elapsed = (Date.now() - startedAt) / 1000;
+          // Not animated, or the file couldn't be read: treat it as a picture
+          if (!length) return startSlideTimer(Math.max(1, slideSeconds - elapsed));
+          const plays = Math.max(1, Math.ceil(slideSeconds / length));
+          const left = plays * length - elapsed;
+          // Already past that (slideshow switched on late): finish this play
+          startSlideTimer(
+            left >= 1 ? left : Math.max(1, length - (elapsed % length)),
+          );
+        },
+      );
     }
 
     function advanceSlide() {
