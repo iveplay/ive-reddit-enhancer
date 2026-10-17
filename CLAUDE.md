@@ -5,7 +5,7 @@ Vanilla JS + CSS content scripts injected into Reddit's new UI (Shreddit). No bu
 ## Project Structure
 
 ```
-reddit-inject-script.js   # Main script — all 8 features in one IIFE
+reddit-inject-script.js   # Main script — all 9 features in one IIFE
 reddit-inject.css          # Layout overrides (full-width, right sidebar collapsed behind a rail until hovered or pinned)
 ```
 
@@ -21,13 +21,15 @@ reddit-inject.css          # Layout overrides (full-width, right sidebar collaps
 
 8. **Redgifs player helper** — when the same file is also injected into `https://www.redgifs.com/ifr/*` frames, it presses the embed's own HD button, unmutes embeds opened by the fullscreen viewer (marked with a `#re-sound` hash), and posts the real clip length to the page for exact slideshow timing. Does nothing unless injected there.
 
+9. **Media Type Filter** — floating button above the grid toggle opens a menu: All / Photos only (images, galleries) / Videos & GIFs only (videos, GIFs, Redgifs and other embeds). Filtered-out feed articles get `.re-filtered-out` (hidden); text/link posts are hidden under either filter. The fullscreen viewer skips posts that don't pass (`passesMediaFilter`)
+
 ## Key Technical Details
 
 - Targets Reddit's custom elements: `<shreddit-post>`, `<shreddit-feed>`, `<shreddit-embed>`, `<gallery-carousel>`
 - Relies on data attributes: `post-type`, `content-href`, `permalink`, `author`, `subreddit-prefixed-name`
 - MutationObserver-heavy — watches feed and embeds for dynamic changes
 - Styles injected via `document.createElement("style")` appended to `<head>`
-- Settings persist in `localStorage` under `re-*` keys (`re-grid`, `re-grid-cols`, `re-grid-compact`, `re-slide-seconds`, `re-autoscroll-level`, `re-volume`, `re-right-sidebar`) via the `store` helper
+- Settings persist in `localStorage` under `re-*` keys (`re-grid`, `re-grid-cols`, `re-grid-compact`, `re-slide-seconds`, `re-autoscroll-level`, `re-volume`, `re-right-sidebar`, `re-media-filter`) via the `store` helper
 - Grid placeholders: flat feeds (home, custom feeds — posts are direct children of the feed) get one placeholder per post, kept in its own cell via `.grid-home`; batched feeds get full-width placeholders
 - Compact cards hide the vote row by appending a `<style data-grid-compact>` into each post's shadow root
 - Slideshow timing for redgifs: the embed is a cross-origin iframe and `api.redgifs.com` rejects requests from reddit.com (CORS), so the clip length comes from Reddit's own `<permalink>.json` (`preview.reddit_video_preview.duration`, also checked on `crosspost_parent_list`); falls back to 15s when that is missing
@@ -46,5 +48,5 @@ Not a standalone extension — requires a host to inject into Reddit pages (brow
 - No build step — edit files directly
 - `"use strict"` at top of script
 - Each feature is a self-contained function called from the main init block
-- CSS classes/IDs used: `.redgifs-wrapper`, `.redgifs-reload-btn`, `.grid-view`, `.grid-home`, `.grid-compact`, `#fs-gallery`, `#fs-post-counter`, `#fs-controls`, `#fs-volume`, `#fs-volume-btn`, `#fs-volume-slider`, `#fs-slideshow`, `#fs-slideshow-btn`, `#fs-slideshow-speed`, `#fs-slideshow-progress`, `#auto-scroll`, `#auto-scroll-btn`, `.grid-post-meta`, `#grid-toggle-btn`, `#grid-cols-btn`, `#grid-compact-btn`, `#right-sidebar-rail`, `#right-sidebar-btn`, `.re-right-sidebar-open`, `.re-right-sidebar-peek`
+- CSS classes/IDs used: `.redgifs-wrapper`, `.redgifs-reload-btn`, `.grid-view`, `.grid-home`, `.grid-compact`, `#fs-gallery`, `#fs-post-counter`, `#fs-controls`, `#fs-volume`, `#fs-volume-btn`, `#fs-volume-slider`, `#fs-slideshow`, `#fs-slideshow-btn`, `#fs-slideshow-speed`, `#fs-slideshow-progress`, `#auto-scroll`, `#auto-scroll-btn`, `.grid-post-meta`, `#grid-toggle-btn`, `#grid-cols-btn`, `#grid-compact-btn`, `#right-sidebar-rail`, `#right-sidebar-btn`, `.re-right-sidebar-open`, `.re-right-sidebar-peek`, `#media-filter`, `#media-filter-btn`, `.re-filtered-out`
 - Author: Diemas (info@diemas.dev)

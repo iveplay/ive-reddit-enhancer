@@ -8,6 +8,7 @@
 // 7. Auto-scroll (hands-free feed scrolling with adjustable speed)
 // 8. Redgifs player helper (HD + sound) — only when also injected into the
 //    Redgifs embed frame itself, see initRedgifsFrame
+// 9. Media Type Filter (all / photos only / videos & GIFs only)
 (function () {
   "use strict";
 
@@ -68,6 +69,17 @@
     event: "volume",
     volume,
   });
+
+  // Which posts to show: "all", "photos" (images, galleries) or "moving"
+  // (videos, GIFs, Redgifs). Set by the filter menu, also obeyed by the viewer.
+  const MEDIA_FILTERS = {
+    photos: ["image", "gallery"],
+    moving: ["gif", "video", "redgif"],
+  };
+  let mediaFilter = store.get("media-filter", "all");
+  if (!MEDIA_FILTERS[mediaFilter]) mediaFilter = "all";
+  const passesMediaFilter = (type) =>
+    mediaFilter === "all" || MEDIA_FILTERS[mediaFilter].includes(type);
 
   const isRedgifsHost = (urlOrOrigin) => {
     try {
@@ -711,10 +723,22 @@
       target?.scrollIntoView({ behavior: "instant", block: "end" });
     }
 
+    // First index from `index` onwards (in direction `dir`) whose post passes
+    // the media filter; out of range if there is none.
+    function nextMatching(index, dir) {
+      while (
+        index >= 0 &&
+        index < postOrder.length &&
+        !passesMediaFilter(postRegistry.get(postOrder[index])?.type)
+      )
+        index += dir;
+      return index;
+    }
+
     // Move to the previous/next post. Past the last known post, ask Reddit for
     // more instead of doing nothing.
     function step(dir) {
-      const next = currentIndex + dir;
+      const next = nextMatching(currentIndex + dir, dir);
       if (next >= 0 && next < postOrder.length) return show(next);
       if (dir > 0) {
         loadMorePosts();
@@ -1213,7 +1237,10 @@
 
     function open() {
       scanExistingArticles();
-      if (!postOrder.length) return alert("No posts found");
+      const visible = findVisiblePostIndex();
+      let start = nextMatching(visible, 1);
+      if (start >= postOrder.length) start = nextMatching(visible, -1);
+      if (start < 0) return alert("No posts found");
 
       overlay = document.createElement("div");
       overlay.style.cssText =
@@ -1224,7 +1251,7 @@
       document.body.appendChild(overlay);
       document.addEventListener("keydown", handleKey);
       document.addEventListener("wheel", handleWheel, { passive: false });
-      show(findVisiblePostIndex());
+      show(start);
     }
 
     function findVisiblePostIndex() {
@@ -1971,6 +1998,145 @@
   }
 
   // ==========================================
+  // 9. MEDIA TYPE FILTER
+  // ==========================================
+  function initMediaFilter() {
+    const OPTIONS = [
+      {
+        value: "all",
+        label: "All posts",
+        icon: '<svg width="18" height="18" viewBox="0 0 18 18" fill="white"><path d="M1.5 2h15a.8.8 0 0 1 .6 1.3L11 10.5V16a.6.6 0 0 1-.9.5l-3-1.8a.6.6 0 0 1-.3-.5v-3.7L.9 3.3A.8.8 0 0 1 1.5 2Z"/></svg>',
+      },
+      {
+        value: "photos",
+        label: "Photos only",
+        icon: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="white" stroke-width="2"><rect x="1" y="1" width="16" height="16" rx="2"/><path d="M1 13l4.5-4.5 3.5 3.5 3-3 5 5"/><circle cx="12" cy="5.5" r="1.3" fill="white" stroke="none"/></svg>',
+      },
+      {
+        value: "moving",
+        label: "Videos & GIFs only",
+        icon: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="white" stroke-width="2"><rect x="2" y="1" width="14" height="16" rx="2"/><path d="M6 1v16M12 1v16M2 5.5h4M2 9h4M2 12.5h4M12 5.5h4M12 9h4M12 12.5h4"/></svg>',
+      },
+    ];
+
+    const style = document.createElement("style");
+    style.id = "media-filter-style";
+    style.textContent = `
+			shreddit-feed article.re-filtered-out,
+			shreddit-feed article.re-filtered-out + hr {
+				display: none !important;
+			}
+		`;
+    document.head.appendChild(style);
+
+    // Same buckets the viewer uses: "gif" / "video" / "redgif" are moving,
+    // "image" / "gallery" are photos, anything else (text, links) is neither
+    function postType(article) {
+      const post = article.querySelector("shreddit-post");
+      if (!post) return null;
+      const type = post.getAttribute("post-type");
+      const href = post.getAttribute("content-href") || "";
+      if (
+        type === "video" ||
+        article.querySelector(
+          'shreddit-player, shreddit-embed, .redgifs-wrapper, iframe[src*="redgifs.com"]',
+        ) ||
+        /\.(gifv?|mp4|webm)(\?|$)|redgifs\.com|gfycat\.com/i.test(href)
+      )
+        return "video";
+      const img = article.querySelector("zoomable-img img");
+      const imgSrc = img ? `${img.src} ${img.getAttribute("srcset") || ""}` : "";
+      if (/\.gif|format=gif/i.test(imgSrc)) return "gif";
+      if (type === "gallery" || article.querySelector("gallery-carousel"))
+        return "gallery";
+      if (type === "image" || img) return "image";
+      return null;
+    }
+
+    function syncFeed() {
+      document
+        .querySelectorAll("shreddit-feed article[data-post-id]")
+        .forEach((article) => {
+          article.classList.toggle(
+            "re-filtered-out",
+            !passesMediaFilter(postType(article)),
+          );
+        });
+    }
+
+    const wrap = document.createElement("div");
+    wrap.id = "media-filter";
+    wrap.style.cssText =
+      "position:fixed;bottom:74px;right:74px;z-index:9999;display:flex;flex-direction:column;align-items:flex-end;gap:6px;font-family:system-ui,sans-serif;";
+
+    const menu = document.createElement("div");
+    menu.style.cssText =
+      "display:none;flex-direction:column;gap:2px;padding:4px;border-radius:10px;background:rgba(30,30,30,0.92);box-shadow:0 2px 8px rgba(0,0,0,0.3);";
+    const items = OPTIONS.map((option) => {
+      const item = document.createElement("button");
+      item.innerHTML = `${option.icon}<span>${option.label}</span>`;
+      item.style.cssText =
+        "display:flex;align-items:center;gap:8px;padding:6px 10px;border:none;border-radius:6px;background:transparent;color:#fff;font-size:13px;white-space:nowrap;cursor:pointer;text-align:left;";
+      item.onmouseenter = () =>
+        (item.style.background =
+          option.value === mediaFilter ? "#ff4500" : "rgba(255,255,255,0.15)");
+      item.onmouseleave = () => render();
+      item.onclick = () => {
+        mediaFilter = option.value;
+        store.set("media-filter", mediaFilter);
+        menu.style.display = "none";
+        render();
+      };
+      menu.appendChild(item);
+      return item;
+    });
+
+    const btn = document.createElement("button");
+    btn.id = "media-filter-btn";
+    btn.style.cssText =
+      "width:44px;height:44px;border-radius:50%;border:none;background:#ff4500;color:#fff;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;justify-content:center;align-items:center;position:relative;";
+    btn.onclick = () => {
+      menu.style.display = menu.style.display === "none" ? "flex" : "none";
+    };
+    document.addEventListener("click", (e) => {
+      if (!wrap.contains(e.target)) menu.style.display = "none";
+    });
+
+    function render() {
+      const current = OPTIONS.find((o) => o.value === mediaFilter);
+      // Always the funnel; a small badge in the corner names the active type
+      // (both nudged in from the corner so they stay inside the circle)
+      btn.innerHTML =
+        mediaFilter === "all"
+          ? OPTIONS[0].icon
+          : OPTIONS[0].icon.replace("<svg ", '<svg style="transform:translate(-4px,-4px)" ') +
+            `<span style="position:absolute;right:5px;bottom:5px;box-sizing:border-box;width:20px;height:20px;border-radius:50%;background:#222;border:2px solid #ff4500;display:flex;align-items:center;justify-content:center;">${current.icon.replace('width="18" height="18"', 'width="11" height="11"')}</span>`;
+      btn.title = `Showing: ${current.label} (click to change)`;
+      btn.style.background = mediaFilter === "all" ? "#555" : "#ff4500";
+      items.forEach((item, i) => {
+        item.style.background =
+          OPTIONS[i].value === mediaFilter ? "#ff4500" : "transparent";
+      });
+      syncFeed();
+    }
+
+    // At most one sync per frame, however many mutations Reddit fires
+    let syncQueued = false;
+    new MutationObserver(() => {
+      if (syncQueued) return;
+      syncQueued = true;
+      requestAnimationFrame(() => {
+        syncQueued = false;
+        syncFeed();
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+
+    wrap.append(menu, btn);
+    document.body.appendChild(wrap);
+    render();
+  }
+
+  // ==========================================
   // INIT ALL
   // ==========================================
   function init() {
@@ -1981,6 +2147,7 @@
     initGridToggle();
     initHidePromoted();
     initAutoScroll();
+    initMediaFilter();
   }
 
   // Inside a Redgifs embed frame only the player helper applies
