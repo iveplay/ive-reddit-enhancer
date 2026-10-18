@@ -8,7 +8,7 @@
 // 7. Auto-scroll (hands-free feed scrolling with adjustable speed)
 // 8. Redgifs player helper (HD + sound) — only when also injected into the
 //    Redgifs embed frame itself, see initRedgifsFrame
-// 9. Media Type Filter (all / photos only / videos & GIFs only)
+// 9. Media Type Filter (all / photos / videos & GIFs / videos with sound)
 (function () {
   "use strict";
 
@@ -70,16 +70,23 @@
     volume,
   });
 
-  // Which posts to show: "all", "photos" (images, galleries) or "moving"
-  // (videos, GIFs, Redgifs). Set by the filter menu, also obeyed by the viewer.
+  // Which posts to show: "all", "photos" (images, galleries), "moving"
+  // (videos, GIFs, Redgifs) or "sound" (videos and Redgifs that have an audio
+  // track). Set by the filter menu, also obeyed by the viewer.
   const MEDIA_FILTERS = {
     photos: ["image", "gallery"],
     moving: ["gif", "video", "redgif"],
+    sound: ["video", "redgif"],
   };
   let mediaFilter = store.get("media-filter", "all");
   if (!MEDIA_FILTERS[mediaFilter]) mediaFilter = "all";
-  const passesMediaFilter = (type) =>
-    mediaFilter === "all" || MEDIA_FILTERS[mediaFilter].includes(type);
+  // postId -> true / false once known whether the clip has sound. Clips not
+  // checked yet stay in, so they get the chance to be checked.
+  const hasAudio = new Map();
+  const passesMediaFilter = (type, postId) =>
+    mediaFilter === "all" ||
+    (MEDIA_FILTERS[mediaFilter].includes(type) &&
+      (mediaFilter !== "sound" || hasAudio.get(postId) !== false));
 
   const isRedgifsHost = (urlOrOrigin) => {
     try {
@@ -276,6 +283,61 @@
     window.addEventListener("resize", syncRail);
     document.body.appendChild(rail);
     render();
+  }
+
+  // Reddit's own collapse button for the left sidebar forgets its state when
+  // the browser restarts. Remember what it was last set to and press the
+  // matching button again on load if Reddit opens the sidebar the other way.
+  // The nav element reports its state as expanded="1" / "0", and has separate
+  // expand and collapse buttons (only one of them visible at a time).
+  function initLeftSidebarMemory() {
+    const NAV = "flex-left-nav-container#left-sidebar-container";
+    const EXPAND = "#flex-nav-expand-button";
+    const COLLAPSE = "#flex-nav-collapse-button";
+
+    // Save the state whenever the user presses one of the two buttons
+    let userClicked = false;
+    document.addEventListener(
+      "click",
+      (e) => {
+        if (!e.isTrusted || !(e.target instanceof Element)) return;
+        const button = e.target.closest(`${EXPAND}, ${COLLAPSE}`);
+        if (!button) return;
+        userClicked = true;
+        store.set("left-sidebar", button.matches(EXPAND) ? "1" : "0");
+      },
+      true,
+    );
+
+    // Bring each new copy of the nav in line with the saved state. Reddit may
+    // render the buttons before their click handlers are ready, so keep trying
+    // for a few seconds, but stop as soon as the user presses one themselves.
+    const settled = new WeakSet();
+    const tries = new WeakMap();
+    function apply() {
+      const wanted = store.get("left-sidebar", null);
+      if (wanted === null || userClicked) return;
+      const nav = document.querySelector(NAV);
+      if (!nav || settled.has(nav) || !nav.hasAttribute("expanded")) return;
+      if (nav.getAttribute("expanded") === wanted) return settled.add(nav);
+      const count = tries.get(nav) || 0;
+      if (count >= 10) return settled.add(nav);
+      tries.set(nav, count + 1);
+      nav.querySelector(wanted === "1" ? EXPAND : COLLAPSE)?.click();
+      setTimeout(apply, 300);
+    }
+
+    let queued = false;
+    const observer = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        apply();
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    apply();
   }
 
   // ==========================================
@@ -729,7 +791,10 @@
       while (
         index >= 0 &&
         index < postOrder.length &&
-        !passesMediaFilter(postRegistry.get(postOrder[index])?.type)
+        !passesMediaFilter(
+          postRegistry.get(postOrder[index])?.type,
+          postOrder[index],
+        )
       )
         index += dir;
       return index;
@@ -1979,6 +2044,33 @@
     // The sound button never appears for silent clips, so stop looking
     setTimeout(() => observer.disconnect(), 20000);
 
+    // Tell the page whether this clip has sound (for the "Videos with sound"
+    // filter): it does once the sound button shows up, and doesn't if the
+    // button is still missing a few seconds into playback.
+    let audioReported = false;
+    const reportAudio = (value) => {
+      if (audioReported || window.parent === window) return;
+      audioReported = true;
+      clearInterval(audioCheck);
+      window.parent.postMessage(
+        { source: "reddit-enhancer", event: "audio", hasAudio: value },
+        "*",
+      );
+    };
+    const audioCheck = setInterval(() => {
+      if (document.querySelector(".SoundButton")) reportAudio(true);
+    }, 500);
+    setTimeout(() => clearInterval(audioCheck), 20000);
+    document.addEventListener(
+      "playing",
+      () =>
+        setTimeout(
+          () => reportAudio(!!document.querySelector(".SoundButton")),
+          4000,
+        ),
+      { capture: true, once: true },
+    );
+
     // Tell the page each time playback (re)starts, with the true clip length,
     // so its slideshow can wait for exactly one play.
     document.addEventListener(
@@ -2016,6 +2108,11 @@
         value: "moving",
         label: "Videos & GIFs only",
         icon: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="white" stroke-width="2"><rect x="2" y="1" width="14" height="16" rx="2"/><path d="M6 1v16M12 1v16M2 5.5h4M2 9h4M2 12.5h4M12 5.5h4M12 9h4M12 12.5h4"/></svg>',
+      },
+      {
+        value: "sound",
+        label: "Videos with sound",
+        icon: '<svg width="18" height="18" viewBox="0 0 14 14" fill="white"><path d="M6.6 1.6a.6.6 0 0 1 1 .5v9.8a.6.6 0 0 1-1 .5L3.5 9.5H1.6A.6.6 0 0 1 1 8.9V5.1a.6.6 0 0 1 .6-.6h1.9l3.1-2.9Z"/><path d="M9.4 4.3a.6.6 0 0 1 .9 0 4 4 0 0 1 0 5.4.6.6 0 1 1-.9-.8 2.8 2.8 0 0 0 0-3.8.6.6 0 0 1 0-.8Z"/><path d="M11.2 2.5a.6.6 0 0 1 .9 0 6.6 6.6 0 0 1 0 9 .6.6 0 1 1-.9-.8 5.4 5.4 0 0 0 0-7.4.6.6 0 0 1 0-.8Z"/></svg>',
       },
     ];
 
@@ -2059,10 +2156,90 @@
         .forEach((article) => {
           article.classList.toggle(
             "re-filtered-out",
-            !passesMediaFilter(postType(article)),
+            !passesMediaFilter(postType(article), article.dataset.postId),
           );
         });
+      if (mediaFilter === "sound") checkAudio();
     }
+
+    // Reddit's own post data says whether a Reddit-hosted video has sound.
+    // Up to 100 posts are looked up per request.
+    const audioAsked = new Set(); // asked once only, whatever the answer
+    let audioTimer = null;
+    function checkAudio() {
+      if (audioTimer) return;
+      audioTimer = setTimeout(() => {
+        audioTimer = null;
+        const ids = [];
+        document
+          .querySelectorAll("shreddit-feed article[data-post-id]")
+          .forEach((article) => {
+            const id = article.dataset.postId;
+            if (
+              postType(article) === "video" &&
+              !hasAudio.has(id) &&
+              !audioAsked.has(id) &&
+              /^t3_\w+$/.test(id)
+            )
+              ids.push(id);
+          });
+        for (let i = 0; i < ids.length; i += 100) {
+          const batch = ids.slice(i, i + 100);
+          batch.forEach((id) => audioAsked.add(id));
+          fetch(`/by_id/${batch.join(",")}.json?raw_json=1`, {
+            credentials: "include",
+          })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((json) => {
+              json?.data?.children?.forEach(({ data }) => {
+                const audio = audioFromPostData(data);
+                if (audio !== null) hasAudio.set(data.name, audio);
+              });
+            })
+            .catch(() => {})
+            .finally(syncFeed);
+        }
+      }, 300);
+    }
+
+    // true / false for Reddit videos and YouTube/Vimeo-style embeds; null
+    // when the data doesn't say (Redgifs: the frame helper reports those)
+    function audioFromPostData(data) {
+      // A crosspost keeps its media details on the original post
+      for (const item of [data, ...(data?.crosspost_parent_list || [])]) {
+        const video =
+          item?.secure_media?.reddit_video || item?.media?.reddit_video;
+        if (video && typeof video.has_audio === "boolean")
+          return video.has_audio;
+        const provider = (
+          item?.secure_media?.oembed || item?.media?.oembed
+        )?.provider_name;
+        if (/youtube|vimeo|streamable|twitch/i.test(provider || "")) return true;
+      }
+      return null;
+    }
+
+    // Redgifs: the frame helper says whether the clip has a sound track
+    window.addEventListener("message", (e) => {
+      if (!isRedgifsHost(e.origin) || e.data?.source !== "reddit-enhancer")
+        return;
+      if (e.data.event !== "audio" || typeof e.data.hasAudio !== "boolean")
+        return;
+      const frame = [...document.querySelectorAll("iframe")].find(
+        (f) => f.contentWindow === e.source,
+      );
+      if (!frame) return;
+      // A feed embed sits in its post; the viewer's copy is found by its src
+      const src = frame.src.split("#")[0];
+      const article =
+        frame.closest("article[data-post-id]") ||
+        [...document.querySelectorAll(".redgifs-wrapper")]
+          .find((w) => w.dataset.redgifsSrc?.split("#")[0] === src)
+          ?.closest("article[data-post-id]");
+      if (!article) return;
+      hasAudio.set(article.dataset.postId, e.data.hasAudio);
+      syncFeed();
+    });
 
     const wrap = document.createElement("div");
     wrap.id = "media-filter";
@@ -2142,6 +2319,7 @@
   function init() {
     initRedgifsFix();
     initRightSidebarToggle();
+    initLeftSidebarMemory();
     initFullscreenViewer();
     initUserLinkRewrite();
     initGridToggle();
