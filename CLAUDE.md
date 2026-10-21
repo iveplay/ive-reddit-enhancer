@@ -37,7 +37,7 @@ styles/
 ## Conventions
 
 - Settings: one `Settings` object (`lib/settings.ts`), read with `getSettings()` / `useSettings`, changed with `updateSettings(patch)`, reacted to with `watchSettings(select, fn)`. Every feature checks its `features.*` flag at run time so toggles apply live without reload.
-- Page DOM classes/ids are prefixed `ire-` (`html.ire-wide`, `.ire-sidebar*`, `shreddit-feed.ire-grid`/`.ire-grid-flat`/`.ire-grid-compact`, `article.ire-filtered-out`, `.ire-redgifs*`, `.ire-post-meta`, `#ire-sidebar-rail`). All page CSS is keyed off these.
+- Page DOM classes/ids are prefixed `ire-` (`html.ire-wide`, `.ire-sidebar*`, `shreddit-feed.ire-grid`/`.ire-grid-flat`/`.ire-grid-compact`, `article.ire-filtered-out`, `.ire-redgifs*`, `.ire-post-meta`, `#ire-sidebar-rail`, `#ire-sidebar-head`, `html.ire-sidebar-railed`). All page CSS is keyed off these.
 - Never add a new MutationObserver for the body; use `onDomChange`.
 - Injected UI uses `--ive-*` tokens from `styles/theme.scss`; extension pages use daisyUI classes. Icons: `@tabler/icons-react` (plain SVG strings in `features/icons.ts` for elements put into Reddit's DOM).
 - Prettier: single quotes, no semicolons, width 100.

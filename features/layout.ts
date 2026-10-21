@@ -11,15 +11,17 @@ export const initWideLayout = () => setRootClass('ire-wide', true)
 // Collapsed, the sidebar floats just past the right edge with only a thin
 // rail showing; hovering the rail glides rail and sidebar in together over the
 // page. The arrow on the rail pins the sidebar back into the page beside the
-// feed, where only the arrow is left. All state lives on <html>, so it
+// feed; the arrow then moves into a small row at the top of the sidebar, so it
+// never covers the sidebar's own content. All state lives on <html>, so it
 // survives Reddit replacing the sidebar element on navigation.
 export function initRightSidebar() {
   const rail = document.createElement('div')
   rail.id = 'ire-sidebar-rail'
+  const head = document.createElement('div')
+  head.id = 'ire-sidebar-head'
   const button = document.createElement('button')
   button.id = 'ire-sidebar-btn'
   button.innerHTML = CHEVRON_LEFT_SVG
-  rail.appendChild(button)
 
   const enabled = () => getSettings().features.rightSidebar
   const pinned = () => getSettings().rightSidebarPinned
@@ -39,12 +41,39 @@ export function initRightSidebar() {
 
   button.onclick = () => updateSettings({ rightSidebarPinned: !pinned() })
 
+  // The sidebar and rail start under Reddit's header, whatever its height
+  const measureHeader = () => {
+    const bottom = document.querySelector('header')?.getBoundingClientRect().bottom
+    const height = bottom && bottom > 0 && bottom < 200 ? Math.round(bottom) : 56
+    document.documentElement.style.setProperty('--ire-header', `${height}px`)
+  }
+
   // Reddit hides the sidebar on narrow windows (and some pages have none);
-  // the rail goes with it
-  const syncRail = () => {
+  // the rail goes with it. Only does real work when something changed.
+  let lastSidebar: Element | null = null
+  let lastVisible: boolean | null = null
+  const syncRail = (force = false) => {
     const sidebar = document.getElementById('right-sidebar-container')
-    rail.hidden = !enabled() || !sidebar || getComputedStyle(sidebar).display === 'none'
+    const sidebarChanged = sidebar !== lastSidebar
+    if (!force && !sidebarChanged && rail.isConnected && (!pinned() || head.isConnected)) return
+    lastSidebar = sidebar
+    if (sidebarChanged) measureHeader()
+    const visible = enabled() && !!sidebar && getComputedStyle(sidebar).display !== 'none'
+    if (visible !== lastVisible || force || sidebarChanged) {
+      lastVisible = visible
+      rail.hidden = !visible
+      // Room for the rail along the right edge, so it covers no content
+      setRootClass('ire-sidebar-railed', visible && !pinned())
+    }
     if (!rail.isConnected) document.body.appendChild(rail)
+    // Pinned: the arrow sits in its own row at the top of the sidebar
+    if (enabled() && pinned() && sidebar) {
+      if (head.parentElement !== sidebar) sidebar.prepend(head)
+      if (button.parentElement !== head) head.appendChild(button)
+    } else {
+      head.remove()
+      if (button.parentElement !== rail) rail.appendChild(button)
+    }
   }
 
   const render = () => {
@@ -52,13 +81,17 @@ export function initRightSidebar() {
     setRootClass('ire-sidebar-pinned', enabled() && pinned())
     setPeek(false)
     button.title = pinned() ? 'Collapse sidebar' : 'Keep sidebar open'
-    syncRail()
+    measureHeader()
+    syncRail(true)
   }
 
   watchSettings((s) => s.features.rightSidebar, render)
   watchSettings((s) => s.rightSidebarPinned, render)
-  window.addEventListener('resize', syncRail)
-  onDomChange(syncRail)
+  window.addEventListener('resize', () => {
+    measureHeader()
+    syncRail(true)
+  })
+  onDomChange(() => syncRail())
   render()
 }
 
