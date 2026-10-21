@@ -1,0 +1,112 @@
+/*
+ * Theme for the UI injected into Reddit (dock + viewer).
+ *
+ * It renders inside a shadow root (WXT's createShadowRootUi rewrites :root to
+ * :host), so Reddit's CSS can't reach in and ours can't leak out. The palette
+ * is IVE's daisyUI "dim" theme, the same values as the companion app's
+ * app.css and the IVE extension's ive-theme.scss.
+ */
+
+:root {
+  --ive-base-100: oklch(19% 0.014 280);
+  --ive-base-200: oklch(23% 0.013 280);
+  --ive-base-300: oklch(29% 0.015 280);
+  --ive-base-content: oklch(94% 0.008 280);
+  --ive-surface-chrome: oklch(15% 0.013 280);
+  --ive-primary: oklch(52% 0.2 352);
+  --ive-primary-content: oklch(97% 0.013 350);
+  --ive-success: oklch(64% 0.16 155);
+  --ive-warning: oklch(75% 0.17 80);
+  --ive-error: oklch(62% 0.21 22);
+  --ive-radius-selector: 0.7rem;
+  --ive-radius-field: 0.7rem;
+  --ive-radius-box: 1rem;
+
+  /* Brand gradient (companion's .btn-brand) */
+  --ive-brand-gradient: linear-gradient(135deg, #c81d7a, #8b1257);
+  --ive-brand-gradient-hover: linear-gradient(135deg, #d4267f, #991460);
+  --ive-brand-shadow: 0 4px 12px rgba(200, 29, 122, 0.3);
+  --ive-brand-glow: #e84d9e;
+
+  /* Floating glass surfaces (the IVE extension's player controls) */
+  --ive-glass: color-mix(in oklch, var(--ive-base-200) 88%, transparent);
+  --ive-glass-border: color-mix(in oklch, var(--ive-base-300) 70%, transparent);
+  --ive-glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --ive-hover: color-mix(in oklch, var(--ive-base-content) 12%, transparent);
+  --ive-active: color-mix(in oklch, var(--ive-base-content) 20%, transparent);
+  --ive-muted: color-mix(in oklch, var(--ive-base-content) 55%, transparent);
+  --ive-faint: color-mix(in oklch, var(--ive-base-content) 35%, transparent);
+}
+
+html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ive-base-content);
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:where(button, input) {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  margin: 0;
+}
+
+:where(button) {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+:where(a) {
+  color: inherit;
+  text-decoration: none;
+}
+
+:where(button, a, input):focus-visible {
+  outline: 2px solid var(--ive-primary);
+  outline-offset: 2px;
+}
+
+/* Range inputs styled like daisyUI's range-primary */
+input[type='range'] {
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--ive-primary) 0 var(--fill, 50%),
+    var(--ive-base-300) var(--fill, 50%) 100%
+  );
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--ive-base-content);
+    box-shadow: 0 0 0 3px var(--ive-primary);
+    transition: transform 0.15s ease;
+  }
+  &::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: none;
+    border-radius: 50%;
+    background: var(--ive-base-content);
+    box-shadow: 0 0 0 3px var(--ive-primary);
+  }
+  &:hover::-webkit-slider-thumb {
+    transform: scale(1.15);
+  }
+}

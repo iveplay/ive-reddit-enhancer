@@ -1,0 +1,41 @@
+{
+  "name": "ive-reddit-enhancer",
+  "description": "Grid view, fullscreen viewer, slideshow and media filters for Reddit",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "author": "Diemas <info@diemas.dev>",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "compile": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "format": "prettier --write \"**/*.{ts,tsx,scss,css,json,md}\"",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "@tabler/icons-react": "^3.44.0",
+    "clsx": "^2.1.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.2",
+    "@types/chrome": "^0.0.313",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@wxt-dev/auto-icons": "^1.1.1",
+    "@wxt-dev/module-react": "^1.2.2",
+    "daisyui": "^5.6.6",
+    "prettier": "^3.9.3",
+    "sass-embedded": "^1.100.0",
+    "tailwindcss": "^4.3.2",
+    "typescript": "^5.9.3",
+    "wxt": "^0.20.27"
+  }
+}

@@ -1,0 +1,111 @@
+/* The popup. Same setup as the IVE companion app: Tailwind + daisyUI with
+   IVE's "dim" theme. */
+@import 'tailwindcss';
+@source '../entrypoints/popup';
+@source '../components/settings';
+@plugin "daisyui";
+@plugin "daisyui/theme" {
+  name: 'dim';
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+  --color-base-100: oklch(19% 0.014 280);
+  --color-base-200: oklch(23% 0.013 280);
+  --color-base-300: oklch(29% 0.015 280);
+  --color-base-content: oklch(94% 0.008 280);
+  --color-primary: oklch(52% 0.2 352);
+  --color-primary-content: oklch(97% 0.013 350);
+  --color-secondary: oklch(64% 0.18 5);
+  --color-secondary-content: oklch(97% 0.013 5);
+  --color-accent: oklch(64% 0.18 5);
+  --color-accent-content: oklch(97% 0.013 5);
+  --color-neutral: oklch(20% 0.012 262);
+  --color-neutral-content: oklch(94% 0.008 262);
+  --color-info: oklch(70% 0.15 220);
+  --color-info-content: oklch(14% 0.02 220);
+  --color-success: oklch(64% 0.16 155);
+  --color-success-content: oklch(14% 0.02 155);
+  --color-warning: oklch(75% 0.17 80);
+  --color-warning-content: oklch(14% 0.02 80);
+  --color-error: oklch(62% 0.21 22);
+  --color-error-content: oklch(14% 0.02 22);
+  --radius-selector: 0.7rem;
+  --radius-field: 0.7rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@font-face {
+  font-family: 'Frankfurter';
+  src: url('/fonts/frankfurter-highlight-std.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The IVE wordmark: white "IVE" with a stroked magenta "ive" offset behind */
+.logo-mark {
+  position: relative;
+  display: inline-block;
+  z-index: 1;
+  font-family: 'Frankfurter', sans-serif;
+  font-weight: normal;
+  color: #fff;
+  line-height: 0.7;
+  letter-spacing: -0.02em;
+}
+
+.logo-mark::after {
+  content: 'ive';
+  z-index: -1;
+  position: absolute;
+  inset: 0;
+  font-size: 1em;
+  color: #7b024d;
+  -webkit-text-stroke-width: 2.5px;
+  -webkit-text-stroke-color: #7b024d;
+}
+
+/* App chrome (sidebar, header): a touch darker than the content area */
+.surface-chrome {
+  background-color: oklch(15% 0.013 280);
+}
+
+.heading-display {
+  font-family: 'Frankfurter', sans-serif;
+  font-weight: normal;
+  letter-spacing: -0.02em;
+}
+
+.btn-brand {
+  background-image: linear-gradient(135deg, #c81d7a, #8b1257);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(200, 29, 122, 0.3);
+}
+.btn-brand:hover {
+  background-image: linear-gradient(135deg, #d4267f, #991460);
+}
+.btn-brand:disabled,
+.btn-brand[disabled] {
+  background-image: none;
+  box-shadow: none;
+}
+
+.page-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+.page-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.page-scroll::-webkit-scrollbar-thumb {
+  background: oklch(50% 0.02 264 / 0.3);
+  border-radius: 2px;
+}

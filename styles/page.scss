@@ -1,0 +1,438 @@
+/*
+ * Styles for Reddit's own DOM (the dock and viewer have theirs in a shadow
+ * root). Injected as one <style> at document start. Every rule is keyed off a
+ * class we set, so switching a feature off in the settings undoes it at once:
+ *
+ *   html.ire-wide            feed fills the page
+ *   html.ire-sidebar         right sidebar collapsed behind a rail
+ *   html.ire-sidebar-pinned  ...pinned back into the page
+ *   html.ire-sidebar-peek    ...slid out over the page (pointer on it)
+ *   html.ire-no-promoted     ads hidden
+ *   shreddit-feed.ire-grid   grid view (+ .ire-grid-flat, .ire-grid-compact)
+ *   article.ire-filtered-out hidden by the media filter
+ */
+
+$brand-gradient: linear-gradient(135deg, #c81d7a, #8b1257);
+$chrome: oklch(15% 0.013 280);
+$border: oklch(29% 0.015 280);
+$sidebar-width: 316px;
+$header: 56px;
+
+/* --- Wide layout -------------------------------------------------------- */
+
+/* The right sidebar gets its own column, which stays empty (0 wide) unless
+   the sidebar is pinned open */
+html.ire-wide {
+  .main-container {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    column-gap: 0 !important;
+    width: 100%;
+    max-width: none;
+  }
+  #subgrid-container,
+  #main-content {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+/* --- Right sidebar rail ------------------------------------------------- */
+
+#ire-sidebar-rail {
+  display: none;
+}
+
+html.ire-sidebar {
+  /* Collapsed: the sidebar floats just past the right edge, with the rail as
+     the visible strip on its left */
+  #right-sidebar-container {
+    position: fixed;
+    top: $header;
+    right: 0;
+    width: $sidebar-width;
+    height: calc(100vh - #{$header});
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: var(--color-neutral-background, #0e1113);
+    z-index: 9;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition:
+      transform 0.3s ease,
+      visibility 0s 0.3s;
+  }
+
+  #ire-sidebar-rail {
+    display: block;
+    position: fixed;
+    top: $header;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    width: 16px;
+    border-left: 1px solid var(--color-neutral-border-weak, #2a3236);
+    background: var(--color-neutral-background, #0e1113);
+    transition: transform 0.3s ease;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  #ire-sidebar-btn {
+    position: absolute;
+    top: 12px;
+    right: 0;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid $border;
+    background: $chrome;
+    color: oklch(94% 0.008 280);
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease;
+
+    svg {
+      transition: transform 0.3s ease;
+    }
+
+    &:hover {
+      background-image: $brand-gradient;
+      border-color: transparent;
+      color: #fff;
+    }
+  }
+}
+
+/* Peek: rail and sidebar glide in together. The short delay keeps them from
+   popping out when the pointer just passes by. */
+html.ire-sidebar.ire-sidebar-peek {
+  #right-sidebar-container {
+    transform: none;
+    visibility: visible;
+    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+    transition:
+      transform 0.3s ease 0.15s,
+      visibility 0s 0.15s;
+  }
+  #ire-sidebar-rail {
+    transform: translateX(-$sidebar-width);
+    transition: transform 0.3s ease 0.15s;
+  }
+}
+
+/* Pinned: back in the page beside the feed, stuck under the header, with
+   only the arrow (turned around) left in the top right corner */
+html.ire-sidebar.ire-sidebar-pinned {
+  #right-sidebar-container {
+    position: sticky;
+    align-self: start;
+    height: auto;
+    max-height: calc(100vh - #{$header});
+    background: none;
+    z-index: auto;
+    transform: none;
+    visibility: visible;
+    transition: none;
+  }
+  .main-container:has(> #right-sidebar-container) {
+    column-gap: 1rem !important;
+  }
+  #ire-sidebar-rail {
+    background: none;
+    border-color: transparent;
+    pointer-events: none;
+  }
+  #ire-sidebar-btn {
+    pointer-events: auto;
+    svg {
+      transform: rotate(180deg);
+    }
+  }
+}
+
+html.ire-sidebar body:not(:has(#right-sidebar-container)) #ire-sidebar-rail {
+  display: none;
+}
+
+/* --- Hide promoted ------------------------------------------------------ */
+
+html.ire-no-promoted {
+  shreddit-ad-post,
+  shreddit-dynamic-ad-link,
+  shreddit-comments-page-ad,
+  shreddit-comment-tree-ad,
+  shreddit-sidebar-ad,
+  article:has(shreddit-ad-post),
+  shreddit-ad-post + hr,
+  article:has(shreddit-ad-post) + hr {
+    display: none !important;
+  }
+}
+
+/* --- Media filter ------------------------------------------------------- */
+
+shreddit-feed article.ire-filtered-out,
+shreddit-feed article.ire-filtered-out + hr {
+  display: none !important;
+}
+
+/* --- Redgifs embeds ----------------------------------------------------- */
+
+.ire-redgifs {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  background: #111;
+}
+
+.ire-redgifs-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.ire-redgifs-shield {
+  position: absolute;
+  inset: 0 0 48px 0;
+  z-index: 1;
+  cursor: pointer;
+}
+
+/* --- Grid view ---------------------------------------------------------- */
+
+shreddit-feed.ire-grid {
+  display: grid !important;
+  grid-template-columns: repeat(var(--ire-grid-cols, 3), minmax(0, 1fr)) !important;
+  gap: 8px !important;
+
+  > hr,
+  > faceplate-loader,
+  > faceplate-partial:not([slot='load-after']),
+  > achievement-events,
+  > shreddit-screenview-data,
+  > reddit-page-data {
+    display: none !important;
+  }
+
+  > faceplate-batch {
+    display: grid !important;
+    grid-template-columns: repeat(var(--ire-grid-cols, 3), minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    grid-column: 1 / -1;
+
+    > hr {
+      display: none !important;
+    }
+  }
+
+  > [slot='load-after'] {
+    grid-column: 1 / -1;
+  }
+
+  > .virtualized-placeholder[style*='height: 0'] {
+    display: none !important;
+  }
+  > .virtualized-placeholder:not([style*='height: 0']) {
+    grid-column: 1 / -1 !important;
+  }
+
+  > article,
+  > faceplate-batch > article {
+    overflow: hidden;
+    border-radius: 12px;
+  }
+
+  shreddit-post {
+    padding: 4px !important;
+  }
+
+  /* Galleries are built for a fixed 540px height. Size them from the tile
+     width and the first image's shape instead (cqw = % of tile width) */
+  [slot='post-media-container'] {
+    container-type: inline-size;
+  }
+  gallery-carousel {
+    --gallery-initial-height: calc(var(--ire-gallery-ratio, 1.25) * 100cqw) !important;
+    display: block !important;
+    height: var(--gallery-initial-height) !important;
+    min-height: 220px;
+    max-height: 540px !important;
+    overflow: hidden !important;
+
+    > ul {
+      height: 100% !important;
+    }
+  }
+}
+
+/* Flat feeds: one placeholder per post, each keeps its own cell */
+shreddit-feed.ire-grid.ire-grid-flat > .virtualized-placeholder:not([style*='height: 0']) {
+  visibility: hidden !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  grid-column: auto !important;
+}
+
+/* --- Compact cards: media only, details fade in on hover ---------------- */
+
+shreddit-feed.ire-grid-compact {
+  $media-post: 'shreddit-post:has([slot="post-media-container"])';
+
+  &,
+  > faceplate-batch {
+    gap: 4px !important;
+  }
+
+  #{$media-post} {
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+
+    > [slot='credit-bar'],
+    > [slot='post-flair'],
+    > [slot='text-body'],
+    > [slot='ssr-post-content-header'] {
+      display: none !important;
+    }
+
+    > [slot='title'] {
+      position: absolute !important;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 3;
+      margin: 0 !important;
+      padding: 10px 12px 26px !important;
+      color: #fff !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      line-height: 1.3 !important;
+      background: linear-gradient(rgba(0, 0, 0, 0.85), transparent);
+      display: -webkit-box !important;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      pointer-events: none;
+    }
+
+    > .ire-post-meta {
+      display: flex;
+    }
+
+    &:hover > [slot='title'],
+    &:hover > .ire-post-meta {
+      opacity: 1;
+    }
+  }
+
+  shreddit-post [slot='post-media-container'] {
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+
+    > div {
+      margin: 0 !important;
+    }
+
+    /* Crossposts repeat the source subreddit and title inside the media
+       box, and add an "N upvotes · N comments" line under it */
+    > div:has(> .crosspost-credit-bar),
+    > div.text-12:has(faceplate-number),
+    > div:has(> .truncate faceplate-number),
+    .crosspost-credit-bar,
+    .crosspost-title {
+      display: none !important;
+    }
+  }
+
+  shreddit-content-tags {
+    display: none !important;
+  }
+}
+
+/* Subreddit and author along the bottom of a compact tile, "View" on the
+   right */
+.ire-post-meta {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  padding: 26px 10px 10px 12px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+
+  flex-wrap: wrap;
+  row-gap: 4px;
+
+  > span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Age, score and comments, a line above the names */
+  .ire-post-stats {
+    flex-basis: 100%;
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+    font-variant-numeric: tabular-nums;
+
+    span {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+  }
+
+  a {
+    color: #fff !important;
+    text-decoration: none;
+    pointer-events: auto;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .ire-post-meta-view {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    border-radius: 8px;
+    background-image: $brand-gradient;
+    box-shadow: 0 4px 12px rgba(200, 29, 122, 0.3);
+    font-weight: 600;
+
+    &:hover {
+      text-decoration: none;
+      filter: brightness(1.1);
+    }
+  }
+}

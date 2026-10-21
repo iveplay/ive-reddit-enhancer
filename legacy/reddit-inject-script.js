@@ -421,6 +421,9 @@
       if (!(length > 0 && length < 3600)) return;
       const post = postRegistry.get(postOrder[currentIndex]);
       if (post?.type !== "redgif") return;
+      // "playing" fires again on every loop, stall and HD switch; only the
+      // first one marks the start, or the countdown would restart forever
+      if (playStart.shownAt === shownAt) return;
       clipLengths.set(post.postId, Promise.resolve(length));
       playStart = { shownAt, at: Date.now() };
       if (slideshow) startSlideTimer(redgifSecondsLeft(length));
