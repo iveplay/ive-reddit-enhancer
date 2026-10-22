@@ -30,6 +30,8 @@ export type PageMessage =
   | { source: typeof FRAME_SOURCE; event: 'volume'; volume: number }
   /** Play the clip if paused, pause it if playing */
   | { source: typeof FRAME_SOURCE; event: 'toggle-play' }
+  /** The mouse went over (or left) a feed embed; with autoplay off it plays only then */
+  | { source: typeof FRAME_SOURCE; event: 'hover'; on: boolean }
 
 const hostMatches = (urlOrOrigin: string, pattern: RegExp) => {
   try {

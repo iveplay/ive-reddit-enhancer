@@ -69,6 +69,11 @@ export function App() {
             'Redgifs in HD with sound',
             'HD by default, sound on in the viewer',
           )}
+          {feature(
+            'redgifsAutoplay',
+            'Autoplay Redgifs in the feed',
+            touch ? 'Off: clips stay paused until opened' : 'Off: clips play only while hovered',
+          )}
         </Group>
 
         <Group label="Page">

@@ -1,4 +1,5 @@
 import { onDomChange } from '@/lib/dom'
+import { FRAME_SOURCE, REDGIFS_ORIGIN, onFrameMessage, type PageMessage } from '@/lib/frames'
 
 // Reddit's <shreddit-embed> for Redgifs shows nothing useful. Swap it for a
 // plain iframe of the Redgifs player, loaded only while at least half of it is
@@ -44,6 +45,11 @@ function fixEmbed(embed: Element) {
   const shield = document.createElement('div')
   shield.className = 'ire-redgifs-shield'
 
+  // The shield also keeps the mouse from the frame, so tell it about hovers
+  // (with autoplay off, a clip plays only while hovered)
+  wrapper.addEventListener('mouseenter', () => postHover(iframe, true))
+  wrapper.addEventListener('mouseleave', () => postHover(iframe, false))
+
   wrapper.append(iframe, shield)
   const container = embed.closest('shreddit-aspect-ratio') ?? embed.parentElement
   if (!container) return
@@ -53,11 +59,26 @@ function fixEmbed(embed: Element) {
   lazyLoad.observe(wrapper)
 }
 
+function postHover(iframe: HTMLIFrameElement, on: boolean) {
+  iframe.contentWindow?.postMessage(
+    { source: FRAME_SOURCE, event: 'hover', on } satisfies PageMessage,
+    REDGIFS_ORIGIN,
+  )
+}
+
 function fixAll() {
   document.querySelectorAll('shreddit-embed:not([data-ire-fixed])').forEach(fixEmbed)
 }
 
 export function initRedgifsEmbeds() {
+  // A frame that loads under the mouse missed the mouseenter
+  onFrameMessage((message, event) => {
+    if (message.event !== 'hello') return
+    const iframe = [...document.querySelectorAll<HTMLIFrameElement>('.ire-redgifs-frame')].find(
+      (f) => f.contentWindow === event.source,
+    )
+    if (iframe?.parentElement?.matches(':hover')) postHover(iframe, true)
+  })
   onDomChange(fixAll)
   // Reddit sometimes fills in an embed's html attribute after adding it
   setInterval(fixAll, 2000)

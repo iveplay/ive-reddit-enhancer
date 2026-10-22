@@ -1,5 +1,5 @@
 import { onPageMessage, postToPage, SOUND_HASH, isRedditHost } from '@/lib/frames'
-import { getSettings, loadSettings } from '@/lib/settings'
+import { getSettings, loadSettings, watchSettings } from '@/lib/settings'
 
 // Runs inside the Redgifs player frames that Reddit (and our viewer) embed.
 // The player always starts muted and in SD and takes no option to change
@@ -24,6 +24,7 @@ export default defineContentScript({
     followPageVolume()
     reportPlayback()
     followPlayToggle()
+    followAutoplay()
     forwardWheel()
     forwardTouches()
     if (settings.features.redgifsHelper) pressPlayerButtons()
@@ -150,6 +151,39 @@ function followPlayToggle() {
   onPageMessage((message) => message.event === 'toggle-play' && toggle())
 }
 
+// With autoplay off, a clip in the feed waits paused and plays only while the
+// mouse is over it (the page reports hovers, its shield keeps the mouse from
+// us; the bottom strip is ours). The viewer's clips always play.
+function followAutoplay() {
+  if (location.hash.includes(SOUND_HASH)) return
+  let pageHover = false
+  let frameHover = false
+  const allowed = () => getSettings().features.redgifsAutoplay || pageHover || frameHover
+  const apply = () => {
+    const player = video()
+    if (!player) return
+    if (!allowed()) player.pause()
+    else if (player.paused) player.play().catch(() => {})
+  }
+
+  // The player starts (and restarts) the clip on its own, sometimes before
+  // we're here to see the "play"; timeupdate catches any clip that got going
+  const hold = (event: Event) => allowed() || (event.target as HTMLVideoElement).pause()
+  for (const type of ['play', 'playing', 'timeupdate']) document.addEventListener(type, hold, true)
+  onPageMessage((message) => {
+    if (message.event !== 'hover') return
+    pageHover = !!message.on
+    apply()
+  })
+  document.addEventListener('mouseover', () => !frameHover && ((frameHover = true), apply()))
+  document.documentElement.addEventListener('mouseleave', () => {
+    frameHover = false
+    apply()
+  })
+  watchSettings((s) => s.features.redgifsAutoplay, apply)
+  apply()
+}
+
 // The clip itself: the largest video, in case the page also has small ones
 const video = () =>
   [...document.querySelectorAll('video')].sort(
@@ -218,7 +252,7 @@ function followPageVolume() {
 }
 
 // Has sound once the sound button shows up; doesn't if it is still missing a
-// few seconds into playback
+// few seconds after the clip loaded (it may stay paused, see followAutoplay)
 function reportAudio() {
   let reported = false
   const report = (hasAudio: boolean) => {
@@ -230,10 +264,14 @@ function reportAudio() {
   const hasButton = () => !!document.querySelector('.SoundButton')
   const poll = setInterval(() => hasButton() && report(true), 500)
   setTimeout(() => clearInterval(poll), 20_000)
-  document.addEventListener('playing', () => setTimeout(() => report(hasButton()), 4000), {
-    capture: true,
-    once: true,
-  })
+  let waiting = false
+  const settle = () => {
+    if (waiting) return
+    waiting = true
+    setTimeout(() => report(hasButton()), 4000)
+  }
+  document.addEventListener('playing', settle, { capture: true, once: true })
+  document.addEventListener('loadeddata', settle, { capture: true, once: true })
 }
 
 // Each time playback (re)starts, with the true clip length

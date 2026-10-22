@@ -22,6 +22,8 @@ export interface Settings {
     hidePromoted: boolean
     /** Inside Redgifs frames: switch to HD, unmute in the viewer */
     redgifsHelper: boolean
+    /** Redgifs clips in the feed play on their own; off = only while hovered */
+    redgifsAutoplay: boolean
   }
   /** `narrowCols` applies on phone-sized screens, `cols` everywhere else */
   grid: { on: boolean; cols: number; narrowCols: number; compact: boolean }
@@ -48,6 +50,7 @@ export const DEFAULT_SETTINGS: Settings = {
     userLinks: true,
     hidePromoted: true,
     redgifsHelper: true,
+    redgifsAutoplay: true,
   },
   grid: { on: false, cols: 3, narrowCols: 1, compact: false },
   viewer: { slideSeconds: 5, volume: 1, preload: true, throughGalleries: true },
