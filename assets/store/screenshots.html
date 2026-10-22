@@ -1,0 +1,435 @@
+<!doctype html>
+<!--
+  Store screenshots, rendered with headless Chrome by store/render.sh.
+  ?s=grid | viewer | promo picks the shot. All imagery is generated here
+  (no Reddit content), so the listing stays clean for store review.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @font-face {
+        font-family: Frankfurter;
+        src: url('../public/fonts/frankfurter-highlight-std.otf');
+      }
+      :root {
+        --base-100: oklch(19% 0.014 280);
+        --base-200: oklch(23% 0.013 280);
+        --base-300: oklch(29% 0.015 280);
+        --content: oklch(94% 0.008 280);
+        --muted: color-mix(in oklch, var(--content) 55%, transparent);
+        --chrome: oklch(15% 0.013 280);
+        --primary: oklch(52% 0.2 352);
+        --brand: linear-gradient(135deg, #c81d7a, #8b1257);
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        width: 1280px;
+        height: 800px;
+        overflow: hidden;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        color: var(--content);
+        background:
+          radial-gradient(900px 500px at 15% -10%, rgba(200, 29, 122, 0.35), transparent 70%),
+          radial-gradient(700px 500px at 110% 110%, rgba(139, 18, 87, 0.4), transparent 70%),
+          var(--chrome);
+      }
+      body.promo {
+        width: 440px;
+        height: 280px;
+      }
+      .shot {
+        display: none;
+        position: absolute;
+        inset: 0;
+      }
+      body.grid #grid,
+      body.viewer #viewer,
+      body.promo #promo {
+        display: block;
+      }
+
+      /* --- Caption ------------------------------------------------------ */
+      .caption {
+        position: absolute;
+        top: 44px;
+        left: 0;
+        right: 0;
+        text-align: center;
+      }
+      .caption h1 {
+        font-family: Frankfurter, sans-serif;
+        font-weight: normal;
+        font-size: 44px;
+        letter-spacing: 0.5px;
+      }
+      .caption p {
+        margin-top: 8px;
+        font-size: 19px;
+        color: var(--muted);
+      }
+
+      /* --- Browser frame ------------------------------------------------ */
+      .browser {
+        position: absolute;
+        left: 80px;
+        right: 80px;
+        top: 170px;
+        bottom: -20px;
+        border-radius: 14px 14px 0 0;
+        overflow: hidden;
+        background: #0b0b0f;
+        border: 1px solid var(--base-300);
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+      }
+      .bar {
+        height: 38px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 14px;
+        background: var(--base-200);
+        border-bottom: 1px solid var(--base-300);
+      }
+      .dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--base-300);
+      }
+      .url {
+        margin-left: 14px;
+        flex: 0 1 420px;
+        height: 24px;
+        border-radius: 12px;
+        background: var(--base-100);
+        font-size: 12px;
+        line-height: 24px;
+        padding-left: 14px;
+        color: var(--muted);
+      }
+
+      /* --- Grid shot ---------------------------------------------------- */
+      .feed {
+        position: absolute;
+        top: 38px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 14px 70px 0 14px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        align-content: start;
+      }
+      .card {
+        border-radius: 10px;
+        overflow: hidden;
+        background: #16161c;
+      }
+      .card svg {
+        display: block;
+        width: 100%;
+        aspect-ratio: 4 / 3;
+      }
+      .meta {
+        padding: 7px 10px 9px;
+        font-size: 12px;
+      }
+      .meta b {
+        display: block;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .meta span {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .dock {
+        position: absolute;
+        right: 12px;
+        bottom: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 6px;
+        border-radius: 1rem;
+        background: color-mix(in oklch, var(--base-200) 88%, transparent);
+        border: 1px solid var(--base-300);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+      }
+      .btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 0.7rem;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+      }
+      .btn.on {
+        background: color-mix(in oklch, var(--primary) 18%, transparent);
+        color: color-mix(in oklch, var(--primary) 55%, white);
+      }
+      .btn.brand {
+        background-image: var(--brand);
+        box-shadow: 0 4px 12px rgba(200, 29, 122, 0.3);
+        color: #fff;
+      }
+      .btn svg {
+        width: 22px;
+        height: 22px;
+      }
+
+      /* --- Viewer shot -------------------------------------------------- */
+      .browser > .viewer {
+        position: absolute;
+        top: 38px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #000;
+      }
+      .viewer .stage {
+        position: absolute;
+        inset: 0 0 84px 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .viewer .stage svg {
+        width: 780px;
+        height: 520px;
+      }
+      .progress {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 3px;
+        width: 62%;
+        background-image: linear-gradient(90deg, #8b1257, #c81d7a, #e84d9e);
+        box-shadow: 0 0 12px rgba(214, 31, 138, 0.6);
+      }
+      .info {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 20px;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 18px;
+        background: #0b0b0f;
+        border-top: 1px solid var(--base-300);
+      }
+      .info .text {
+        flex: 1;
+        font-size: 14px;
+      }
+      .info .text span {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 34px;
+        padding: 0 12px;
+        border-radius: 0.7rem;
+        background: var(--base-200);
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .pill svg {
+        width: 18px;
+        height: 18px;
+      }
+      .arrow {
+        position: absolute;
+        top: calc(50% - 32px);
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+      .arrow svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      /* --- Promo tile --------------------------------------------------- */
+      #promo {
+        display: none;
+        padding: 28px;
+      }
+      body.promo #promo {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+      }
+      #promo img {
+        flex: none;
+        width: 104px;
+        height: 104px;
+        filter: drop-shadow(0 10px 24px rgba(200, 29, 122, 0.45));
+      }
+      #promo h1 {
+        font-family: Frankfurter, sans-serif;
+        font-weight: normal;
+        font-size: 30px;
+        line-height: 1.05;
+      }
+      #promo p {
+        margin-top: 10px;
+        font-size: 14px;
+        color: var(--muted);
+        line-height: 1.35;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="shot" id="grid">
+      <div class="caption">
+        <h1>Reddit as a grid</h1>
+        <p>See the whole feed at a glance. Pick the number of columns, filter by media type.</p>
+      </div>
+      <div class="browser">
+        <div class="bar">
+          <i class="dot"></i><i class="dot"></i><i class="dot"></i>
+          <div class="url">reddit.com/r/LandscapePhotography</div>
+        </div>
+        <div class="feed" id="feed"></div>
+        <div class="dock">
+          <div class="btn on" data-icon="grid"></div>
+          <div class="btn" data-icon="filter"></div>
+          <div class="btn" data-icon="scroll"></div>
+          <div class="btn brand" data-icon="max"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="shot" id="viewer">
+      <div class="caption">
+        <h1>Fullscreen viewer &amp; slideshow</h1>
+        <p>Images, galleries, videos and GIFs, one after another. Swipe, use the arrow keys, or sit back.</p>
+      </div>
+      <div class="browser">
+        <div class="bar">
+          <i class="dot"></i><i class="dot"></i><i class="dot"></i>
+          <div class="url">reddit.com/r/LandscapePhotography</div>
+        </div>
+        <div class="viewer">
+          <div class="stage" id="hero"></div>
+          <div class="progress"></div>
+          <div class="arrow" style="left: 18px" data-icon="left"></div>
+          <div class="arrow" style="right: 18px" data-icon="right"></div>
+          <div class="info">
+            <div class="text">
+              Last light over the ridge, after three days of rain
+              <span>r/LandscapePhotography · 4 / 128</span>
+            </div>
+            <div class="pill"><span data-icon="volume"></span>80%</div>
+            <div class="pill"><span data-icon="clock"></span>5s</div>
+            <div class="pill" style="color: #fff; background-image: var(--brand)">
+              <span data-icon="pause"></span>Slideshow
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="shot" id="promo">
+      <img src="../assets/icon.svg" alt="" />
+      <div>
+        <h1>Reddit<br />Enhancer</h1>
+        <p>Grid view, fullscreen viewer<br />and slideshow for Reddit.</p>
+      </div>
+    </section>
+
+    <script>
+      document.body.className = new URLSearchParams(location.search).get('s') || 'grid'
+
+      // Tabler icons (outline, 24 grid)
+      const ICONS = {
+        grid: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>',
+        filter: '<path d="M4 4h16v2.17a2 2 0 0 1-.59 1.42L15 12v7l-6 2v-8.5L4.52 7.56A2 2 0 0 1 4 6.21V4z"/>',
+        scroll: '<path d="M7 7l5 5 5-5M7 13l5 5 5-5"/>',
+        max: '<path d="M16 4h4v4M14 10l6-6M8 20H4v-4M4 20l6-6M16 20h4v-4M14 14l6 6M8 4H4v4M4 4l6 6"/>',
+        left: '<path d="M15 6l-6 6 6 6"/>',
+        right: '<path d="M9 6l6 6-6 6"/>',
+        volume: '<path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/>',
+        clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+        pause: '<rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/>',
+      }
+      for (const el of document.querySelectorAll('[data-icon]')) {
+        el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[el.dataset.icon]}</svg>`
+      }
+
+      // Generated landscapes: sky, sun, three ridges, optional lake
+      const PALETTES = [
+        ['#ffb36b', '#ff6f91', '#3b2a5c', '#5b3d7a', '#2a1c42', '#160f26'],
+        ['#9fd8ff', '#e8f6ff', '#4a7c8c', '#2f5c6b', '#1f3f4a', '#0f2228'],
+        ['#ffd28a', '#ff8a5c', '#7a4a3a', '#5a3328', '#3a2019', '#1e0f0b'],
+        ['#1a2a6c', '#b21f5c', '#2b1846', '#1e1033', '#130a22', '#080412'],
+        ['#c3f0e0', '#fef9d7', '#5c8a5a', '#3f6b45', '#2a4a30', '#14261a'],
+        ['#6dd5ed', '#2193b0', '#3a5f7a', '#26465c', '#183041', '#0b1a24'],
+        ['#fbc2eb', '#a6c1ee', '#6a5a8c', '#4c3f6b', '#33294a', '#1a1428'],
+        ['#ff9a8b', '#ffe29f', '#8a5a6a', '#6a4050', '#462a36', '#22131a'],
+      ]
+      let seed = 7
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+      function ridge(y, rough, color) {
+        let d = `M0 300 L0 ${y}`
+        for (let x = 0; x <= 400; x += 25) d += ` L${x} ${y + (rnd() - 0.5) * rough}`
+        return `<path d="${d} L400 300 Z" fill="${color}"/>`
+      }
+      function scene(i, w = 400, h = 300) {
+        const p = PALETTES[i % PALETTES.length]
+        const id = 'g' + i + Math.round(rnd() * 1e6)
+        const sunX = 60 + rnd() * 280
+        const sunY = 70 + rnd() * 60
+        const lake = rnd() > 0.55
+        return `<svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice">
+          <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="${p[0]}"/><stop offset="1" stop-color="${p[1]}"/>
+          </linearGradient></defs>
+          <rect width="400" height="300" fill="url(#${id})"/>
+          <circle cx="${sunX}" cy="${sunY}" r="${18 + rnd() * 16}" fill="#fff" opacity="0.75"/>
+          ${ridge(150 + rnd() * 30, 90, p[2])}
+          ${ridge(190 + rnd() * 20, 60, p[3])}
+          ${ridge(225 + rnd() * 15, 40, p[4])}
+          ${lake ? `<rect y="255" width="400" height="45" fill="${p[1]}" opacity="0.35"/><rect y="262" width="400" height="38" fill="${p[5]}" opacity="0.7"/>` : ridge(258, 20, p[5])}
+        </svg>`
+      }
+      const TITLES = [
+        ['Golden hour in the Dolomites', 'r/LandscapePhotography · 2.4k'],
+        ['Fog rolling into the valley this morning', 'r/LandscapePhotography · 1.1k'],
+        ['Desert canyon after sunset', 'r/LandscapePhotography · 860'],
+        ['Night sky over the lake', 'r/LandscapePhotography · 3.2k'],
+        ['Spring hike, worth every step', 'r/LandscapePhotography · 540'],
+        ['The fjord was glass today', 'r/LandscapePhotography · 1.7k'],
+        ['Pastel morning in the highlands', 'r/LandscapePhotography · 920'],
+        ['Autumn ridge line', 'r/LandscapePhotography · 410'],
+        ['Blue hour from the summit', 'r/LandscapePhotography · 2.0k'],
+        ['Wildflowers below the glacier', 'r/LandscapePhotography · 760'],
+        ['Last light on the peaks', 'r/LandscapePhotography · 1.3k'],
+        ['Calm before the storm', 'r/LandscapePhotography · 680'],
+      ]
+      document.getElementById('feed').innerHTML = TITLES.map(
+        ([t, m], i) => `<div class="card">${scene(i)}<div class="meta"><b>${t}</b><span>${m}</span></div></div>`,
+      ).join('')
+      document.getElementById('hero').innerHTML = scene(3)
+    </script>
+  </body>
+</html>
