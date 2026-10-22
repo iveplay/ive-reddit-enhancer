@@ -29,21 +29,25 @@ export function App() {
   return (
     // Firefox for Android opens the popup as a whole page: fill it
     <main className="w-[340px] max-h-[600px] pointer-coarse:w-full pointer-coarse:max-h-none pointer-coarse:min-h-dvh overflow-y-auto page-scroll bg-base-100 text-base-content">
-      <header className="sticky top-0 z-10 flex items-center gap-2.5 px-4 h-14 border-b border-base-300 surface-chrome">
-        <span className="logo-mark text-2xl">IVE</span>
-        <span className="text-[9px] font-bold uppercase tracking-[3px] text-base-content/30 pt-1">
-          reddit enhancer
+      <header className="header-brand sticky top-0 z-10 flex items-center gap-3 pl-5 pr-3 h-16">
+        {/* Nudge on a wrapper: padding on .logo-mark would split it from its ::after layer */}
+        <span className="pt-1.5">
+          <span className="logo-mark text-[32px]">IVE</span>
         </span>
-        <span className="ml-auto text-[10px] tabular-nums text-base-content/30 pt-0.5">
-          v{browser.runtime.getManifest().version}
-        </span>
+        <span className="h-7 w-px bg-base-content/10" />
+        <div className="flex flex-col gap-0.5 leading-none">
+          <span className="text-[14px] font-semibold tracking-tight">Reddit Enhancer</span>
+          <span className="text-[10px] tabular-nums text-base-content/40">
+            v{browser.runtime.getManifest().version}
+          </span>
+        </div>
         <button
-          className="btn btn-ghost btn-xs btn-square text-base-content/40 hover:text-base-content"
+          className="ml-auto btn btn-ghost btn-sm btn-square text-base-content/40 hover:text-base-content"
           title="Reset to defaults"
           aria-label="Reset to defaults"
           onClick={reset}
         >
-          <IconRotateClockwise size={14} />
+          <IconRotateClockwise size={16} />
         </button>
       </header>
 

@@ -78,6 +78,29 @@ body {
   background-color: oklch(15% 0.013 280);
 }
 
+/* The popup header: chrome surface with a soft brand glow behind the logo
+   and a gradient hairline that fades out to the right */
+.header-brand {
+  background-color: oklch(15% 0.013 280);
+  background-image: radial-gradient(
+    ellipse 90px 60px at 44px 50%,
+    rgba(200, 29, 122, 0.16),
+    transparent
+  );
+}
+.header-brand::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 1px;
+  background-image: linear-gradient(
+    90deg,
+    rgba(200, 29, 122, 0.7),
+    rgba(139, 18, 87, 0.35) 45%,
+    var(--color-base-300)
+  );
+}
+
 .heading-display {
   font-family: 'Frankfurter', sans-serif;
   font-weight: normal;
