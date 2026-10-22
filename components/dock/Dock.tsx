@@ -12,7 +12,14 @@ import {
   IconPlayerPauseFilled,
   IconPlus,
 } from '@tabler/icons-react'
-import { GRID_COLS, SCROLL_SPEEDS, updateSettings, useSettings } from '@/lib/settings'
+import { NARROW_QUERY, TOUCH_QUERY, useMedia } from '@/lib/device'
+import {
+  GRID_COLS,
+  GRID_COLS_NARROW,
+  SCROLL_SPEEDS,
+  updateSettings,
+  useSettings,
+} from '@/lib/settings'
 import { changeScrollSpeed, toggleAutoScroll, useAutoScroll } from '@/features/autoScroll'
 import { useFeedPresent } from '@/features/feed'
 import { useFilterStats } from '@/features/mediaFilter'
@@ -107,7 +114,12 @@ function DockButton({
   return (
     <button
       type="button"
-      className={clsx(styles.button, on && styles.on, active && styles.active, brand && styles.brand)}
+      className={clsx(
+        styles.button,
+        on && styles.on,
+        active && styles.active,
+        brand && styles.brand,
+      )}
       data-tip={active ? undefined : tip}
       aria-label={tip}
       aria-pressed={on}
@@ -119,7 +131,15 @@ function DockButton({
 }
 
 // A dock button with a popover that opens beside it
-function Anchor({ open, popover, children }: { open: boolean; popover: ReactNode; children: ReactNode }) {
+function Anchor({
+  open,
+  popover,
+  children,
+}: {
+  open: boolean
+  popover: ReactNode
+  children: ReactNode
+}) {
   return (
     <div className={styles.anchor}>
       {children}
@@ -186,6 +206,12 @@ function FilterMenu({ onPick }: { onPick: () => void }) {
 function LayoutMenu() {
   const grid = useSettings((s) => s.settings.grid)
   const setGrid = (patch: Partial<typeof grid>) => updateSettings({ grid: patch })
+  // Phones keep a column count of their own; the stepper sets the one in use
+  const narrow = useMedia(NARROW_QUERY)
+  const colsKey = narrow ? 'narrowCols' : 'cols'
+  const limits = narrow ? GRID_COLS_NARROW : GRID_COLS
+  const cols = grid[colsKey]
+  const touch = useMedia(TOUCH_QUERY)
   return (
     <>
       <p className={styles.menuLabel}>View</p>
@@ -211,17 +237,17 @@ function LayoutMenu() {
           <button
             type="button"
             aria-label="Fewer columns"
-            disabled={!grid.on || grid.cols <= GRID_COLS.min}
-            onClick={() => setGrid({ cols: grid.cols - 1 })}
+            disabled={!grid.on || cols <= limits.min}
+            onClick={() => setGrid({ [colsKey]: cols - 1 })}
           >
             <IconMinus size={14} stroke={2.2} />
           </button>
-          <span className={styles.value}>{grid.cols}</span>
+          <span className={styles.value}>{cols}</span>
           <button
             type="button"
             aria-label="More columns"
-            disabled={!grid.on || grid.cols >= GRID_COLS.max}
-            onClick={() => setGrid({ cols: grid.cols + 1 })}
+            disabled={!grid.on || cols >= limits.max}
+            onClick={() => setGrid({ [colsKey]: cols + 1 })}
           >
             <IconPlus size={14} stroke={2.2} />
           </button>
@@ -230,7 +256,9 @@ function LayoutMenu() {
       <label className={clsx(styles.row, !grid.on && styles.disabled)}>
         <span className={styles.menuText}>
           <span>Compact cards</span>
-          <small>Media only, details on hover</small>
+          <small>
+            {touch ? 'Media only, details along the bottom' : 'Media only, details on hover'}
+          </small>
         </span>
         <input
           type="checkbox"

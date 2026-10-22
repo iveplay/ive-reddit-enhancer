@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   IconArrowBigUp,
@@ -9,6 +9,9 @@ import {
   IconChevronRight,
   IconChevronUp,
   IconExternalLink,
+  IconEye,
+  IconEyeOff,
+  IconHandFinger,
   IconKeyboard,
   IconMinus,
   IconPlayerPauseFilled,
@@ -21,6 +24,7 @@ import {
   IconVolumeOff,
   IconX,
 } from '@tabler/icons-react'
+import { TOUCH_QUERY, useMedia } from '@/lib/device'
 import { compactNumber, fullDate, timeAgo } from '@/lib/format'
 import { SOUND_HASH } from '@/lib/frames'
 import { useSettings } from '@/lib/settings'
@@ -41,6 +45,7 @@ import {
 import { useViewer } from '@/features/viewer/store'
 import { isGifUrl, type Post } from '@/features/posts'
 import { GifPlayer } from './GifPlayer'
+import { useGestures, wasTouch } from './useGestures'
 import styles from './Viewer.module.scss'
 
 const IDLE_MS = 2500
@@ -54,30 +59,82 @@ function Overlay() {
   const index = useViewer((s) => s.index)
   const galleryIndex = useViewer((s) => s.galleryIndex)
   const progress = useViewer((s) => s.progress)
+  const wakes = useViewer((s) => s.wakes)
   const post = currentPost()
+  const touch = useMedia(TOUCH_QUERY)
   const [idle, setIdle] = useState(false)
   const [help, setHelp] = useState(false)
+  const overlay = useRef<HTMLDivElement>(null)
+  const stage = useRef<HTMLDivElement>(null)
+  const footer = useRef<HTMLElement>(null)
+  const idleTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  // Controls fade out while the mouse rests, and come back when it moves
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>
-    const wake = () => {
-      setIdle(false)
-      clearTimeout(timer)
-      timer = setTimeout(() => setIdle(true), IDLE_MS)
-    }
-    wake()
-    window.addEventListener('mousemove', wake)
-    return () => {
-      clearTimeout(timer)
-      window.removeEventListener('mousemove', wake)
-    }
+  // Controls fade out after a while, and come back when the mouse moves or
+  // the screen is tapped
+  const wake = useCallback(() => {
+    setIdle(false)
+    clearTimeout(idleTimer.current)
+    idleTimer.current = setTimeout(() => setIdle(true), IDLE_MS)
   }, [])
+
+  useEffect(() => {
+    wake()
+    // Pointer, not mouse, events: phones send a mousemove after every tap
+    const onMove = (event: PointerEvent) => event.pointerType === 'mouse' && wake()
+    window.addEventListener('pointermove', onMove)
+    return () => {
+      clearTimeout(idleTimer.current)
+      window.removeEventListener('pointermove', onMove)
+    }
+  }, [wake])
+
+  // A tap shows the controls, or puts them away
+  const toggleControls = () => {
+    if (idle) return wake()
+    clearTimeout(idleTimer.current)
+    setIdle(true)
+  }
+
+  // A click on a Redgifs clip, reported by its frame
+  useEffect(() => void (wakes && wake()), [wakes, wake])
+
+  useGestures({
+    enabled: !!post,
+    overlay,
+    stage,
+    zoomable: post?.type === 'image' || post?.type === 'gif' || post?.type === 'gallery',
+    resetKey: `${index}:${galleryIndex}`,
+    onTap: toggleControls,
+  })
+
+  // On phones the post info lies over the media; what sits above it (GIF
+  // controls, gallery dots) needs its height
+  useEffect(() => {
+    const el = footer.current
+    if (!el) return
+    const observer = new ResizeObserver(() =>
+      overlay.current?.style.setProperty('--footer', `${el.offsetHeight}px`),
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [!!post])
 
   if (!post) return null
 
+  // A tap on a Redgifs clip goes to its player, which plays/pauses; the
+  // controls get a button of their own that stays on screen
+  const controlsButton = touch && post.type === 'redgif'
+
   return (
-    <div className={clsx(styles.overlay, idle && !help && styles.idle)}>
+    <div
+      ref={overlay}
+      className={clsx(
+        styles.overlay,
+        idle && !help && styles.idle,
+        // Keep a video's own controls clear of the post info
+        post.type === 'video' && styles.clearFooter,
+      )}
+    >
       {progress.seconds > 0 && (
         <div
           key={progress.key}
@@ -87,34 +144,52 @@ function Overlay() {
       )}
 
       <div
+        ref={stage}
         className={styles.stage}
-        onClick={(e) => e.target === e.currentTarget && closeViewer()}
+        // A click beside the media closes; a tap there only toggles the controls
+        onClick={(e) => e.target === e.currentTarget && !wasTouch() && closeViewer()}
       >
         <Media post={post} galleryIndex={galleryIndex} />
       </div>
 
-      <header className={clsx(styles.top, styles.fades)}>
+      <header
+        className={clsx(styles.top, styles.fades, controlsButton && styles.roomForControlsButton)}
+      >
         <Counter index={index} />
         <div className={styles.spacer} />
         <VolumeControl />
         <SlideshowControl />
         <RoundButton
-          tip="Keyboard shortcuts"
+          tip={touch ? 'Gestures' : 'Keyboard shortcuts'}
           active={help}
           onClick={() => setHelp((h) => !h)}
         >
-          <IconKeyboard size={18} stroke={1.8} />
+          {touch ? (
+            <IconHandFinger size={18} stroke={1.8} />
+          ) : (
+            <IconKeyboard size={18} stroke={1.8} />
+          )}
         </RoundButton>
         <RoundButton tip="Close (Esc)" onClick={closeViewer}>
           <IconX size={20} stroke={1.8} />
         </RoundButton>
       </header>
 
-      {help && <Shortcuts onClose={() => setHelp(false)} />}
+      {controlsButton && (
+        <RoundButton
+          tip={idle ? 'Show controls' : 'Hide controls'}
+          className={clsx(styles.controlsButton, idle && styles.quiet)}
+          onClick={toggleControls}
+        >
+          {idle ? <IconEye size={18} stroke={1.8} /> : <IconEyeOff size={18} stroke={1.8} />}
+        </RoundButton>
+      )}
+
+      {help && <Shortcuts touch={touch} onClose={() => setHelp(false)} />}
 
       {post.type === 'gallery' && <GalleryNav count={post.srcs.length} index={galleryIndex} />}
 
-      <footer className={styles.bottom}>
+      <footer ref={footer} className={styles.bottom}>
         <PostInfo post={post} />
         <nav className={styles.postNav}>
           <RoundButton tip="Previous post (↑)" small onClick={() => step(-1)}>
@@ -325,6 +400,7 @@ function PostInfo({ post }: { post: Post }) {
         </p>
         <PostStats post={post} />
       </div>
+      {/* On phones the chips wrap onto more lines */}
       <div className={styles.links}>
         {community && (
           <Chip href={community.href}>
@@ -429,6 +505,14 @@ function RoundButton({
   )
 }
 
+const GESTURES: [string[], string][] = [
+  [['↑', '↓'], 'Swipe for the next / previous post'],
+  [['←', '→'], 'Swipe through a gallery'],
+  [['Tap'], 'Show / hide the controls'],
+  [['Double'], 'Double-tap to zoom in / out'],
+  [['Pinch'], 'Zoom, then drag to look around'],
+]
+
 const SHORTCUTS: [string[], string][] = [
   [['↑', '↓'], 'Previous / next post'],
   [['←', '→'], 'Previous / next image in a gallery'],
@@ -440,11 +524,11 @@ const SHORTCUTS: [string[], string][] = [
   [['Esc'], 'Close the viewer'],
 ]
 
-function Shortcuts({ onClose }: { onClose: () => void }) {
+function Shortcuts({ touch, onClose }: { touch: boolean; onClose: () => void }) {
   return (
-    <div className={styles.shortcuts} onClick={onClose}>
-      <p className={styles.shortcutsTitle}>Keyboard shortcuts</p>
-      {SHORTCUTS.map(([keys, label]) => (
+    <div className={styles.shortcuts} onClick={onClose} data-no-gestures>
+      <p className={styles.shortcutsTitle}>{touch ? 'Gestures' : 'Keyboard shortcuts'}</p>
+      {(touch ? GESTURES : SHORTCUTS).map(([keys, label]) => (
         <div key={label} className={styles.shortcut}>
           <span className={styles.keys}>
             {keys.map((key) => (

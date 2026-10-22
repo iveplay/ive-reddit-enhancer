@@ -5,7 +5,7 @@ import { compactNumber, fullDate, timeAgo } from '@/lib/format'
 import { ARROW_UP_SVG, COMMENT_SVG, EXTERNAL_SVG } from './icons'
 import { postMeta } from './posts'
 
-// Grid view: the feed laid out in 2–6 columns, optionally as compact cards
+// Grid view: the feed laid out in 2–6 columns (1–4 on phones), optionally as compact cards
 // (media only; title, subreddit/author and a "View post" link on hover).
 // The feed gets classes (.ire-grid, .ire-grid-flat, .ire-grid-compact) that
 // styles/page.scss acts on; the rest needs reaching into shadow roots.
@@ -89,7 +89,8 @@ function postStats(post: Element) {
     parts.push(span)
   }
   if (created) part(timeAgo(created), fullDate(created))
-  if (score !== null) part(`${ARROW_UP_SVG}${compactNumber(score)}`, `${score.toLocaleString()} points`)
+  if (score !== null)
+    part(`${ARROW_UP_SVG}${compactNumber(score)}`, `${score.toLocaleString()} points`)
   if (comments !== null)
     part(`${COMMENT_SVG}${compactNumber(comments)}`, `${comments.toLocaleString()} comments`)
   if (!parts.length) return null
@@ -184,9 +185,14 @@ function syncFeed() {
 }
 
 export function initGrid() {
-  const applyCols = () =>
-    document.documentElement.style.setProperty('--ire-grid-cols', String(getSettings().grid.cols))
+  const applyCols = () => {
+    const { cols, narrowCols } = getSettings().grid
+    const style = document.documentElement.style
+    style.setProperty('--ire-grid-cols', String(cols))
+    style.setProperty('--ire-grid-cols-narrow', String(narrowCols))
+  }
   watchSettings((s) => s.grid.cols, applyCols)
+  watchSettings((s) => s.grid.narrowCols, applyCols)
   watchSettings((s) => s.grid.on, syncFeed)
   watchSettings((s) => s.grid.compact, syncFeed)
   onDomChange(syncFeed)

@@ -75,27 +75,30 @@
     }
   }
 
-  /* Tooltip on the side away from the screen edge */
-  &[data-tip]:hover::after {
-    content: attr(data-tip);
-    position: absolute;
-    top: 50%;
-    right: calc(100% + 14px);
-    transform: translateY(-50%);
-    padding: 5px 9px;
-    border-radius: 8px;
-    background: var(--ive-surface-chrome);
-    border: 1px solid var(--ive-base-300);
-    color: var(--ive-base-content);
-    font-size: 12px;
-    font-weight: 500;
-    white-space: nowrap;
-    pointer-events: none;
-    animation: fadeIn 0.12s ease 0.35s both;
-  }
-  .dock[data-side='left'] &[data-tip]:hover::after {
-    right: auto;
-    left: calc(100% + 14px);
+  /* Tooltip on the side away from the screen edge (not on touch screens,
+     where a tap would leave it stuck) */
+  @media (hover: hover) {
+    &[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      top: 50%;
+      right: calc(100% + 14px);
+      transform: translateY(-50%);
+      padding: 5px 9px;
+      border-radius: 8px;
+      background: var(--ive-surface-chrome);
+      border: 1px solid var(--ive-base-300);
+      color: var(--ive-base-content);
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      pointer-events: none;
+      animation: fadeIn 0.12s ease 0.35s both;
+    }
+    .dock[data-side='left'] &[data-tip]:hover::after {
+      right: auto;
+      left: calc(100% + 14px);
+    }
   }
 }
 
@@ -391,6 +394,68 @@ label.row {
   box-shadow: var(--ive-glass-shadow);
   font-size: 13px;
   animation: popIn 0.16s ease both;
+}
+
+/* --- Phones: a bar along the bottom, menus open above it ---------------- */
+
+/* Keep in step with NARROW_QUERY in lib/device.ts */
+@media (max-width: 640px) {
+  .dock {
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    right: 12px;
+
+    &[data-side='left'] {
+      left: 12px;
+    }
+  }
+
+  .panel {
+    position: relative;
+    flex-direction: row;
+    padding: 4px;
+  }
+
+  .divider {
+    width: 1px;
+    height: 22px;
+    margin: 0 3px;
+  }
+
+  .button {
+    width: 42px;
+    height: 42px;
+  }
+
+  /* Menus hang off the whole bar rather than their own button */
+  .anchor {
+    position: static;
+  }
+
+  .popover,
+  .dock[data-side='left'] .popover {
+    bottom: calc(100% + 10px);
+    right: 0;
+    left: auto;
+    max-width: calc(100vw - 24px);
+    max-height: 70vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .dock[data-side='left'] .popover {
+    right: auto;
+    left: 0;
+  }
+
+  .menuItem,
+  .row {
+    padding-block: 10px;
+  }
+
+  .stepper button {
+    width: 32px;
+    height: 32px;
+  }
 }
 
 @keyframes popIn {

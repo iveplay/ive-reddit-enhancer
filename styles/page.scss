@@ -225,8 +225,9 @@ shreddit-feed article.ire-filtered-out + hr {
 /* --- Grid view ---------------------------------------------------------- */
 
 shreddit-feed.ire-grid {
+  --ire-cols: var(--ire-grid-cols, 3);
   display: grid !important;
-  grid-template-columns: repeat(var(--ire-grid-cols, 3), minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(var(--ire-cols), minmax(0, 1fr)) !important;
   gap: 8px !important;
 
   > hr,
@@ -240,7 +241,7 @@ shreddit-feed.ire-grid {
 
   > faceplate-batch {
     display: grid !important;
-    grid-template-columns: repeat(var(--ire-grid-cols, 3), minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(var(--ire-cols), minmax(0, 1fr)) !important;
     gap: 8px !important;
     grid-column: 1 / -1;
 
@@ -285,6 +286,23 @@ shreddit-feed.ire-grid {
 
     > ul {
       height: 100% !important;
+    }
+  }
+}
+
+/* Phones: their own column count, tighter gaps (keep the width in step with
+   NARROW_QUERY in lib/device.ts) */
+@media (max-width: 640px) {
+  shreddit-feed.ire-grid {
+    --ire-cols: var(--ire-grid-cols-narrow, 1);
+
+    &,
+    > faceplate-batch {
+      gap: 4px !important;
+    }
+
+    gallery-carousel {
+      min-height: 120px;
     }
   }
 }
@@ -348,6 +366,17 @@ shreddit-feed.ire-grid-compact {
     &:hover > [slot='title'],
     &:hover > .ire-post-meta {
       opacity: 1;
+    }
+
+    /* Nothing hovers on a touch screen: the names and link stay up (a tap
+       on the media opens the viewer with the full details) */
+    @media (hover: none) {
+      > .ire-post-meta {
+        opacity: 1;
+      }
+      &:hover > [slot='title'] {
+        opacity: 0;
+      }
     }
   }
 
@@ -431,6 +460,13 @@ shreddit-feed.ire-grid-compact {
     &:hover {
       text-decoration: underline;
     }
+  }
+
+  /* Narrow phone tiles */
+  @media (max-width: 640px) {
+    gap: 6px;
+    padding: 20px 6px 6px 8px;
+    font-size: 11px;
   }
 
   .ire-post-meta-view {

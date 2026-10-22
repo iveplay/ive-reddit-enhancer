@@ -15,6 +15,8 @@ export interface ViewerState {
   count: number
   /** Short message shown over the dock, e.g. when there's nothing to view */
   toast: string | null
+  /** Goes up when the controls should show again (a click inside a Redgifs frame) */
+  wakes: number
 }
 
 export const useViewer = create<ViewerState>()(() => ({
@@ -26,6 +28,7 @@ export const useViewer = create<ViewerState>()(() => ({
   progress: { seconds: 0, key: 0 },
   count: 0,
   toast: null,
+  wakes: 0,
 }))
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined

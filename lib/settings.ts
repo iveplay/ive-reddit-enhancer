@@ -23,8 +23,15 @@ export interface Settings {
     /** Inside Redgifs frames: switch to HD, unmute in the viewer */
     redgifsHelper: boolean
   }
-  grid: { on: boolean; cols: number; compact: boolean }
-  viewer: { slideSeconds: number; volume: number; preload: boolean }
+  /** `narrowCols` applies on phone-sized screens, `cols` everywhere else */
+  grid: { on: boolean; cols: number; narrowCols: number; compact: boolean }
+  viewer: {
+    slideSeconds: number
+    volume: number
+    preload: boolean
+    /** Wheel and slideshow go through a gallery's images; off = straight to the next post */
+    throughGalleries: boolean
+  }
   autoScroll: { level: number }
   mediaFilter: MediaFilter
   rightSidebarPinned: boolean
@@ -42,8 +49,8 @@ export const DEFAULT_SETTINGS: Settings = {
     hidePromoted: true,
     redgifsHelper: true,
   },
-  grid: { on: false, cols: 3, compact: false },
-  viewer: { slideSeconds: 5, volume: 1, preload: true },
+  grid: { on: false, cols: 3, narrowCols: 1, compact: false },
+  viewer: { slideSeconds: 5, volume: 1, preload: true, throughGalleries: true },
   autoScroll: { level: 3 },
   mediaFilter: 'all',
   rightSidebarPinned: false,
@@ -52,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
 }
 
 export const GRID_COLS = { min: 2, max: 6 }
+export const GRID_COLS_NARROW = { min: 1, max: 4 }
 export const SLIDE_SPEEDS = [1, 2, 3, 4, 5, 7, 10, 15, 20, 30] // seconds per post
 export const SCROLL_SPEEDS = [20, 40, 70, 110, 170, 260, 400, 600] // pixels per second
 
@@ -84,6 +92,11 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 function sanitize(raw: unknown): Settings {
   const s = merge(DEFAULT_SETTINGS, raw)
   s.grid.cols = clamp(Math.round(s.grid.cols) || 3, GRID_COLS.min, GRID_COLS.max)
+  s.grid.narrowCols = clamp(
+    Math.round(s.grid.narrowCols) || 1,
+    GRID_COLS_NARROW.min,
+    GRID_COLS_NARROW.max,
+  )
   s.viewer.volume = clamp(Number.isFinite(s.viewer.volume) ? s.viewer.volume : 1, 0, 1)
   if (!(s.viewer.slideSeconds > 0)) s.viewer.slideSeconds = DEFAULT_SETTINGS.viewer.slideSeconds
   s.autoScroll.level = clamp(Math.round(s.autoScroll.level) || 0, 0, SCROLL_SPEEDS.length - 1)

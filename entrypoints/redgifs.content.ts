@@ -25,6 +25,7 @@ export default defineContentScript({
     reportPlayback()
     followPlayToggle()
     forwardWheel()
+    forwardTouches()
     if (settings.features.redgifsHelper) pressPlayerButtons()
   },
 })
@@ -40,6 +41,54 @@ function forwardWheel() {
       postToPage({ event: 'wheel', deltaY: event.deltaY * unit })
     },
     { passive: false, capture: true },
+  )
+}
+
+// Redgifs' own buttons, and the control bar along the bottom, keep their
+// clicks and taps
+const onPlayerControl = (target: EventTarget | null, y: number) =>
+  y > window.innerHeight - 48 ||
+  (target instanceof Element &&
+    !!target.closest('button, a[href]:not(:has(video)), input, [role="button"], [role="slider"]'))
+
+let lastTouchAt = 0 // when a finger last left the screen
+
+// In the viewer the clip fills the screen, so on a phone most swipes land in
+// here. Hand them to the page, which moves between posts. (A tap plays/pauses
+// the clip, see followPlayToggle; the viewer has a button for its controls.)
+function forwardTouches() {
+  if (!location.hash.includes(SOUND_HASH)) return
+  // The browser doesn't scroll or zoom the frame; the swipe is ours
+  document.documentElement.style.touchAction = 'none'
+  let start: { x: number; y: number; at: number } | null = null
+  window.addEventListener(
+    'touchstart',
+    (event) => {
+      const touch = event.touches[0]
+      start =
+        event.touches.length === 1 && touch
+          ? { x: touch.clientX, y: touch.clientY, at: Date.now() }
+          : null
+    },
+    { passive: true, capture: true },
+  )
+  window.addEventListener(
+    'touchend',
+    (event) => {
+      const touch = event.changedTouches[0]
+      lastTouchAt = Date.now()
+      if (!start || !touch || event.touches.length) return
+      const dx = touch.clientX - start.x
+      const dy = touch.clientY - start.y
+      const elapsed = Date.now() - start.at
+      const fast = elapsed < 300
+      start = null
+      const [axis, delta] =
+        Math.abs(dy) >= Math.abs(dx) ? (['y', dy] as const) : (['x', dx] as const)
+      if (Math.abs(delta) < (fast ? 30 : 60)) return
+      postToPage({ event: 'swipe', axis, dir: delta < 0 ? 1 : -1 })
+    },
+    { passive: true, capture: true },
   )
 }
 
@@ -86,15 +135,14 @@ function followPlayToggle() {
       if (event.ctrlKey || event.metaKey || event.shiftKey) return
       // In the feed with the viewer switched off: leave Redgifs' click alone
       if (!inViewer && !getSettings().features.viewer) return
-      const target = event.target as Element
-      if (target.closest('button, a[href]:not(:has(video)), input, [role="button"], [role="slider"]'))
-        return
-      // Leave the control bar along the bottom alone
-      if (event.clientY > window.innerHeight - 48) return
+      if (onPlayerControl(event.target, event.clientY)) return
       event.preventDefault()
       event.stopImmediatePropagation()
-      if (inViewer) toggle()
-      else postToPage({ event: 'open' })
+      if (!inViewer) return postToPage({ event: 'open' })
+      toggle()
+      // ...and bring the viewer's controls back, as moving the mouse would. A
+      // finger tap only plays/pauses; the viewer's own button shows controls.
+      if (Date.now() - lastTouchAt > 800) postToPage({ event: 'tap' })
     },
     true,
   )

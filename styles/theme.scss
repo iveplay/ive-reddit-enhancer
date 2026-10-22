@@ -109,4 +109,17 @@ input[type='range'] {
   &:hover::-webkit-slider-thumb {
     transform: scale(1.15);
   }
+
+  /* A thumb a finger can find */
+  @media (pointer: coarse) {
+    height: 6px;
+    &::-webkit-slider-thumb {
+      width: 20px;
+      height: 20px;
+    }
+    &::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+    }
+  }
 }

@@ -20,6 +20,10 @@ export type FrameMessage =
   | { source: typeof FRAME_SOURCE; event: 'open' }
   /** The mouse wheel turned over the frame (pixels; the frame keeps none of it) */
   | { source: typeof FRAME_SOURCE; event: 'wheel'; deltaY: number }
+  /** A finger swiped across the clip in the viewer; dir +1 = up / to the left */
+  | { source: typeof FRAME_SOURCE; event: 'swipe'; axis: 'x' | 'y'; dir: number }
+  /** The clip was clicked in the viewer (it plays/pauses itself): show the controls */
+  | { source: typeof FRAME_SOURCE; event: 'tap' }
 
 /** Page → frame */
 export type PageMessage =
@@ -40,7 +44,9 @@ export const isRedgifsHost = (urlOrOrigin: string) =>
 export const isRedditHost = (urlOrOrigin: string) => hostMatches(urlOrOrigin, /(^|\.)reddit\.com$/)
 
 const isOurs = (data: unknown): data is { source: string; event: string } =>
-  typeof data === 'object' && data !== null && (data as { source?: unknown }).source === FRAME_SOURCE
+  typeof data === 'object' &&
+  data !== null &&
+  (data as { source?: unknown }).source === FRAME_SOURCE
 
 /** Listen for messages from Redgifs frames (on the Reddit page) */
 export function onFrameMessage(handler: (message: FrameMessage, event: MessageEvent) => void) {
@@ -64,7 +70,11 @@ export function onPageMessage(handler: (message: PageMessage) => void) {
 
 /** Post to the page that embeds this frame */
 export function postToPage(
-  message: FrameMessage extends infer M ? (M extends FrameMessage ? Omit<M, 'source'> : never) : never,
+  message: FrameMessage extends infer M
+    ? M extends FrameMessage
+      ? Omit<M, 'source'>
+      : never
+    : never,
 ) {
   if (window.parent === window) return
   window.parent.postMessage({ source: FRAME_SOURCE, ...message }, '*')

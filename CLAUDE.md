@@ -28,6 +28,7 @@ lib/
   settings.ts               # typed settings in browser.storage.local, live across contexts
   dom.ts                    # shared rAF-throttled MutationObserver (onDomChange), helpers
   frames.ts                 # page <-> Redgifs frame postMessage protocol
+  device.ts                 # NARROW_QUERY / TOUCH_QUERY + useMedia, for phone-specific UI
 styles/
   page.scss                 # styles for Reddit's own DOM, injected via ?inline
   theme.scss                # --ive-* tokens for the shadow-root UI
@@ -49,5 +50,6 @@ styles/
 - Slideshow timing: images use the chosen seconds; videos play to the end (repeat short clips); GIFs are measured by the background (frame delays) and shown for whole plays; Redgifs length comes from `<permalink>.json`, replaced by the real duration from the frame helper's `playing` message.
 - "With sound" filter: Reddit videos via `/by_id/<ids>.json` (`has_audio`), Redgifs via the frame helper's `audio` message.
 - Volume (`settings.viewer.volume`) is owned by the page and posted to every Redgifs frame.
+- Mobile: phones = `max-width: 640px` (keep SCSS media queries in step with `lib/device.ts`), touch = `(hover: none) and (pointer: coarse)`. On phones the dock is a bottom bar, the viewer's post info overlays the media, and the grid uses `grid.narrowCols`. Viewer touch gestures live in `components/viewer/useGestures.ts` (touch pointers only; mouse/keys untouched); swipes/taps inside a Redgifs frame are forwarded by the frame helper as `swipe`/`tap` messages.
 
 Author: Diemas (info@diemas.dev)

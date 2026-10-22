@@ -109,14 +109,21 @@ export function step(dir: number, intoGallery = false) {
 /**
  * Next/previous thing to look at: the next image of a gallery, else the next
  * post. Going back into a gallery starts at its last image. Used by the
- * slideshow and the mouse wheel; ↑↓ jump whole posts.
+ * slideshow and the mouse wheel; ↑↓ jump whole posts. With "through
+ * galleries" off, it jumps whole posts too (←→ still page through).
  */
 export function advance(dir: number) {
+  const through = getSettings().viewer.throughGalleries
   const post = currentPost()
   const galleryIndex = state().galleryIndex
-  if (post?.type === 'gallery' && galleryIndex + dir >= 0 && galleryIndex + dir < post.srcs.length)
+  if (
+    through &&
+    post?.type === 'gallery' &&
+    galleryIndex + dir >= 0 &&
+    galleryIndex + dir < post.srcs.length
+  )
     moveGallery(dir)
-  else step(dir, true)
+  else step(dir, through)
 }
 
 export function moveGallery(dir: number) {
@@ -349,8 +356,7 @@ export function setVolume(volume: number) {
   updateSettings({ viewer: { volume } })
 }
 
-export const toggleMute = () =>
-  setVolume(getSettings().viewer.volume > 0 ? 0 : volumeBeforeMute)
+export const toggleMute = () => setVolume(getSettings().viewer.volume > 0 ? 0 : volumeBeforeMute)
 
 function broadcastVolume() {
   const frames = [...document.querySelectorAll('iframe'), ...(frame ? [frame] : [])]
@@ -413,6 +419,19 @@ function onKey(event: KeyboardEvent) {
   // Keep Reddit's own shortcuts out of it
   event.stopPropagation()
   action()
+}
+
+/**
+ * A finger swipe: up/down for the next/previous post, sideways through a
+ * gallery's images (like ←→) and on into the neighbouring posts. `dir` +1 =
+ * forward (swiped up or to the left).
+ */
+export function swipe(axis: 'x' | 'y', dir: number) {
+  if (axis === 'y') return step(dir)
+  const post = currentPost()
+  const next = state().galleryIndex + dir
+  if (post?.type === 'gallery' && next >= 0 && next < post.srcs.length) moveGallery(dir)
+  else step(dir, true)
 }
 
 // One wheel gesture = one post, rather than flying through the feed
@@ -479,6 +498,9 @@ export function initViewer() {
       return
     }
     if (!state().open || !frame || event.source !== frame.contentWindow) return
+    // Touches on the clip, which never reach the page
+    if (message.event === 'swipe') return swipe(message.axis, message.dir)
+    if (message.event === 'tap') return set({ wakes: state().wakes + 1 })
     const post = currentPost()
     if (post?.type !== 'redgif') return
     if (message.event === 'audio') setHasAudio(post.id, message.hasAudio)

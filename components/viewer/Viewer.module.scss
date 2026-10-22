@@ -1,11 +1,19 @@
+/* Keep in step with lib/device.ts */
+$narrow: '(max-width: 640px)';
+$touch: '(hover: none) and (pointer: coarse)';
+
 .overlay {
   --bar: 64px; /* height of the post info bar along the bottom */
+  --footer: 0px; /* its measured height, where it lies over the media (phones) */
 
   position: fixed;
   inset: 0;
   z-index: 2147483001;
   background: #000;
   animation: fadeIn 0.15s ease both;
+  /* Fingers swipe and zoom the viewer, not the page (see useGestures) */
+  touch-action: none;
+  overscroll-behavior: contain;
 }
 
 /* --- Media -------------------------------------------------------------- */
@@ -86,7 +94,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 16px 36px;
+  padding: calc(14px + env(safe-area-inset-top)) 16px 36px;
   background: linear-gradient(rgba(0, 0, 0, 0.65), transparent);
   pointer-events: none;
 
@@ -97,6 +105,24 @@
 
 .spacer {
   flex: 1;
+}
+
+/* Show/hide the controls (Redgifs on touch screens): in the header's top
+   right corner, and still there when the rest has faded */
+.controlsButton {
+  position: absolute;
+  top: calc(14px + env(safe-area-inset-top));
+  right: 16px;
+  z-index: 5;
+  transition: opacity 0.3s ease;
+
+  &.quiet {
+    opacity: 0.55;
+  }
+}
+
+.roomForControlsButton {
+  padding-right: 64px;
 }
 
 .pill {
@@ -318,7 +344,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 0 16px;
+  padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
   background: var(--ive-surface-chrome);
   border-top: 1px solid var(--ive-base-300);
 }
@@ -463,6 +489,156 @@
     font-family: inherit;
     font-size: 11.5px;
     text-align: center;
+  }
+}
+
+/* --- Touch screens: gestures replace the arrows ------------------------- */
+
+@media #{$touch} {
+  .postNav,
+  .galleryArrow {
+    display: none;
+  }
+
+  /* The phone's own buttons set the level; mute stays */
+  .volume {
+    padding-right: 4px;
+    input {
+      display: none;
+    }
+  }
+}
+
+/* --- Phones: the post info lies over the media and fades with the rest -- */
+
+@media #{$narrow} {
+  .overlay {
+    --bar: 0px;
+  }
+
+  .top {
+    gap: 6px;
+    padding: calc(10px + env(safe-area-inset-top)) 12px 32px;
+  }
+
+  .pill {
+    height: 36px;
+  }
+
+  .round {
+    width: 36px;
+    height: 36px;
+
+    &.small {
+      width: 30px;
+      height: 30px;
+    }
+  }
+
+  .counter {
+    padding: 0 10px;
+  }
+
+  .seconds {
+    min-width: 26px;
+  }
+
+  .play {
+    width: 28px;
+    height: 28px;
+  }
+
+  .volume {
+    padding-right: 2px;
+    input {
+      display: none;
+    }
+  }
+
+  .bottom {
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 40px 12px calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.6) 35%, rgba(0, 0, 0, 0.85));
+    border-top: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .idle .bottom {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .title {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  /* The chips wrap onto as many lines as they need */
+  .links {
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    max-width: 100%;
+  }
+
+  .controlsButton {
+    top: calc(10px + env(safe-area-inset-top));
+    right: 12px;
+  }
+
+  .roomForControlsButton {
+    padding-right: 54px;
+  }
+
+  /* Swipes and keys do this on a phone-sized screen */
+  .postNav {
+    display: none;
+  }
+
+  /* A video's own controls stay clear of the post info */
+  .clearFooter .stage {
+    bottom: var(--footer);
+  }
+
+  .galleryCount {
+    bottom: calc(var(--footer) + 12px);
+  }
+
+  .gifBar {
+    left: 12px;
+    right: 12px;
+    bottom: calc(var(--footer) + 12px);
+    transform: none;
+
+    input {
+      flex: 1;
+      width: auto;
+      min-width: 0;
+    }
+
+    &.raised {
+      bottom: calc(var(--footer) + 52px);
+    }
+  }
+
+  .shortcuts {
+    top: calc(60px + env(safe-area-inset-top));
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+}
+
+/* Very small phones: the counter keeps just the number */
+@media (max-width: 360px) {
+  .counter .dim {
+    display: none;
   }
 }
 

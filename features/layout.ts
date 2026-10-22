@@ -1,3 +1,4 @@
+import { matches, TOUCH_QUERY } from '@/lib/device'
 import { onDomChange, setRootClass } from '@/lib/dom'
 import { getSettings, updateSettings, watchSettings } from '@/lib/settings'
 import { CHEVRON_LEFT_SVG } from './icons'
@@ -7,6 +8,10 @@ import { CHEVRON_LEFT_SVG } from './icons'
 // <html>, so turning an option off in the settings undoes it on the spot.
 
 export const initWideLayout = () => setRootClass('ire-wide', true)
+
+// Neither sidebar feature does anything on a touch screen: the rail works by
+// hovering, and phones show the left nav as a drawer
+const touch = () => matches(TOUCH_QUERY)
 
 // Collapsed, the sidebar floats just past the right edge with only a thin
 // rail showing; hovering the rail glides rail and sidebar in together over the
@@ -23,7 +28,7 @@ export function initRightSidebar() {
   button.id = 'ire-sidebar-btn'
   button.innerHTML = CHEVRON_LEFT_SVG
 
-  const enabled = () => getSettings().features.rightSidebar
+  const enabled = () => getSettings().features.rightSidebar && !touch()
   const pinned = () => getSettings().rightSidebarPinned
 
   const setPeek = (on: boolean) => setRootClass('ire-sidebar-peek', on)
@@ -87,6 +92,7 @@ export function initRightSidebar() {
 
   watchSettings((s) => s.features.rightSidebar, render)
   watchSettings((s) => s.rightSidebarPinned, render)
+  window.matchMedia(TOUCH_QUERY).addEventListener('change', render)
   window.addEventListener('resize', () => {
     measureHeader()
     syncRail(true)
@@ -104,12 +110,16 @@ export function initLeftSidebarMemory() {
   const NAV = 'flex-left-nav-container#left-sidebar-container'
   const EXPAND = '#flex-nav-expand-button'
   const COLLAPSE = '#flex-nav-collapse-button'
+  // Below this width the nav is a drawer that slides over the page; opening
+  // it there isn't the user's sidebar preference, and pressing it would cover
+  // the page on a phone
+  const docked = () => matches('(min-width: 1200px)') && !touch()
 
   let userClicked = false
   document.addEventListener(
     'click',
     (event) => {
-      if (!event.isTrusted || !(event.target instanceof Element)) return
+      if (!event.isTrusted || !(event.target instanceof Element) || !docked()) return
       const button = event.target.closest(`${EXPAND}, ${COLLAPSE}`)
       if (!button) return
       userClicked = true
@@ -126,6 +136,7 @@ export function initLeftSidebarMemory() {
   function apply() {
     const { features, leftSidebarExpanded } = getSettings()
     if (!features.leftSidebarMemory || leftSidebarExpanded === null || userClicked) return
+    if (!docked()) return
     const nav = document.querySelector(NAV)
     if (!nav || settled.has(nav) || !nav.hasAttribute('expanded')) return
     const wanted = leftSidebarExpanded ? '1' : '0'

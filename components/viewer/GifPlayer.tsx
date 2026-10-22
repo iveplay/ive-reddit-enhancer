@@ -5,6 +5,7 @@ import { gifFrameDelays } from '@/lib/gif'
 import { fetchGifFile } from '@/lib/messages'
 import { onImageLoaded, togglePlay } from '@/features/viewer/controller'
 import { useViewer } from '@/features/viewer/store'
+import { wasTouch } from './useGestures'
 import styles from './Viewer.module.scss'
 
 // An <img> can't pause a GIF, so once the file is in, the GIF is decoded here
@@ -131,7 +132,8 @@ export function GifPlayer({ src, alt, raised }: { src: string; alt: string; rais
         <canvas
           ref={canvas}
           className={clsx(styles.media, styles.clickable)}
-          onClick={togglePlay}
+          // A tap toggles the viewer's controls instead (see useGestures)
+          onClick={() => !wasTouch() && togglePlay()}
         />
       )}
       {!failed && (
