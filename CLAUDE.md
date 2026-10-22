@@ -52,4 +52,4 @@ styles/
 - Volume (`settings.viewer.volume`) is owned by the page and posted to every Redgifs frame.
 - Mobile: phones = `max-width: 640px` (keep SCSS media queries in step with `lib/device.ts`), touch = `(hover: none) and (pointer: coarse)`. On phones the dock is a bottom bar, the viewer's post info overlays the media, and the grid uses `grid.narrowCols`. Viewer touch gestures live in `components/viewer/useGestures.ts` (touch pointers only; mouse/keys untouched); swipes/taps inside a Redgifs frame are forwarded by the frame helper as `swipe`/`tap` messages.
 
-Author: Diemas (info@diemas.dev)
+Author: ive (contact@iveplay.io)

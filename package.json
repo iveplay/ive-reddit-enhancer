@@ -4,7 +4,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "author": "Diemas <info@diemas.dev>",
+  "author": "ive <contact@iveplay.io>",
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
