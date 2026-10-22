@@ -2,7 +2,7 @@
   "name": "ive-reddit-enhancer",
   "description": "Grid view, fullscreen viewer, slideshow and media filters for Reddit",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "author": "ive <contact@iveplay.io>",
   "license": "MIT",
