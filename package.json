@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "type": "module",
   "author": "ive <contact@iveplay.io>",
+  "license": "MIT",
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
