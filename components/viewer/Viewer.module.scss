@@ -29,8 +29,11 @@ $touch: '(hover: none) and (pointer: coarse)';
   overflow: hidden;
 }
 
+/* Small media is blown up to at least 60vw wide, unless the height runs out
+   first (object-fit keeps the shape) */
 .media {
   flex: none;
+  min-width: min(60vw, 100%);
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
