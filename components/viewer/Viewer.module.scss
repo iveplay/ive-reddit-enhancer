@@ -237,8 +237,10 @@ $touch: '(hover: none) and (pointer: coarse)';
 
 /* --- Navigation --------------------------------------------------------- */
 
-/* Previous/next post, at the end of the bottom bar */
-.postNav {
+/* Previous/next post at the end of the bottom bar, the post's actions by its
+   links */
+.postNav,
+.actions {
   display: flex;
   flex: none;
   gap: 2px;
@@ -246,6 +248,41 @@ $touch: '(hover: none) and (pointer: coarse)';
   border-radius: 999px;
   background: var(--ive-base-200);
   border: 1px solid var(--ive-base-300);
+}
+
+/* Same colours as the compact cards, in styles/page.scss */
+.actions .round[aria-pressed='true'] {
+  svg {
+    fill: currentColor;
+  }
+
+  &.upvoted {
+    color: #ff4500;
+  }
+  &.downvoted {
+    color: #7193ff;
+  }
+  &.saved {
+    color: #f0429f;
+  }
+}
+
+/* Why something didn't work; over the post info, under the media */
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(var(--bar), var(--footer)) + 16px);
+  z-index: 6;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: var(--ive-radius-field);
+  background: var(--ive-surface-chrome);
+  border: 1px solid var(--ive-base-300);
+  box-shadow: var(--ive-glass-shadow);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: fadeIn 0.14s ease both;
 }
 
 /* A decoded GIF: a click on it plays/pauses */

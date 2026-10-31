@@ -2,11 +2,19 @@ import { onDomChange, setShadowStyle } from '@/lib/dom'
 import { getSettings, watchSettings } from '@/lib/settings'
 import { currentFeed } from './feed'
 import { compactNumber, fullDate, timeAgo } from '@/lib/format'
-import { ARROW_UP_SVG, COMMENT_SVG, EXTERNAL_SVG } from './icons'
+import {
+  ARROW_UP_SVG,
+  BOOKMARK_SVG,
+  COMMENT_SVG,
+  DOWNVOTE_SVG,
+  EXTERNAL_SVG,
+  UPVOTE_SVG,
+} from './icons'
+import { readPostState, toggleSavePost, useActionTick, votePost } from './postActions'
 import { postMeta } from './posts'
 
 // Grid view: the feed laid out in 2–6 columns (1–4 on phones), optionally as compact cards
-// (media only; title, subreddit/author and a "View post" link on hover).
+// (media only; title, subreddit/author, vote/save buttons and a "View post" link on hover).
 // The feed gets classes (.ire-grid, .ire-grid-flat, .ire-grid-compact) that
 // styles/page.scss acts on; the rest needs reaching into shadow roots.
 
@@ -78,26 +86,71 @@ function metaLink(label: string, href: string, className?: string) {
   return a
 }
 
-// "3h · ▲ 1.2k · 💬 84", the line above the names
+function actionButton(html: string, title: string, onClick: () => void) {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'ire-post-action'
+  button.title = title
+  button.setAttribute('aria-label', title)
+  button.innerHTML = html
+  button.addEventListener('click', (event) => {
+    // Don't also open the post (or the viewer) underneath
+    event.preventDefault()
+    event.stopPropagation()
+    onClick()
+  })
+  return button
+}
+
+// Upvote, downvote, save
+function postActions(id: string) {
+  const box = document.createElement('div')
+  box.className = 'ire-post-actions'
+  box.dataset.postId = id
+  box.append(
+    actionButton(UPVOTE_SVG, 'Upvote', () => votePost(id, 1)),
+    actionButton(DOWNVOTE_SVG, 'Downvote', () => votePost(id, -1)),
+    actionButton(BOOKMARK_SVG, 'Save', () => toggleSavePost(id)),
+  )
+  return box
+}
+
+function paintActions(box: HTMLElement) {
+  const { upvoted, downvoted, saved, score } = readPostState(box.dataset.postId ?? '')
+  const [up, down, save] = box.children
+  up?.classList.toggle('ire-upvoted', upvoted)
+  down?.classList.toggle('ire-downvoted', downvoted)
+  save?.classList.toggle('ire-saved', saved)
+  const part = box.parentElement?.querySelector('[data-ire-score]')
+  if (part && score !== null) part.innerHTML = `${ARROW_UP_SVG}${compactNumber(score)}`
+}
+
+const syncActions = () =>
+  document.querySelectorAll<HTMLElement>('.ire-post-actions').forEach(paintActions)
+
+// "3h · ▲ 1.2k · 💬 84", the line above the names, with the actions at its end
 function postStats(post: Element) {
   const { created, score, comments } = postMeta(post)
-  const parts: HTMLElement[] = []
+  const line = document.createElement('div')
+  line.className = 'ire-post-stats'
   const part = (html: string, title: string) => {
     const span = document.createElement('span')
     span.innerHTML = html
     span.title = title
-    parts.push(span)
+    line.appendChild(span)
+    return span
   }
   if (created) part(timeAgo(created), fullDate(created))
   if (score !== null)
-    part(`${ARROW_UP_SVG}${compactNumber(score)}`, `${score.toLocaleString()} points`)
+    part(
+      `${ARROW_UP_SVG}${compactNumber(score)}`,
+      `${score.toLocaleString()} points`,
+    ).dataset.ireScore = ''
   if (comments !== null)
     part(`${COMMENT_SVG}${compactNumber(comments)}`, `${comments.toLocaleString()} comments`)
-  if (!parts.length) return null
-  const line = document.createElement('div')
-  line.className = 'ire-post-stats'
-  line.append(...parts)
-  return line
+  const id = post.closest<HTMLElement>('article[data-post-id]')?.dataset.postId ?? post.id
+  if (id) line.appendChild(postActions(id))
+  return line.childElementCount ? line : null
 }
 
 // Subreddit + author links and a "View post" link along the bottom of a tile
@@ -181,6 +234,7 @@ function syncFeed() {
     if (compact) addPostMeta(post)
     else post.querySelector(':scope > .ire-post-meta')?.remove()
   })
+  syncActions()
   syncGalleries(feed, grid)
 }
 
@@ -195,6 +249,7 @@ export function initGrid() {
   watchSettings((s) => s.grid.narrowCols, applyCols)
   watchSettings((s) => s.grid.on, syncFeed)
   watchSettings((s) => s.grid.compact, syncFeed)
+  useActionTick.subscribe(syncActions)
   onDomChange(syncFeed)
   applyCols()
   syncFeed()

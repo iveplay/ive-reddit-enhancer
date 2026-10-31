@@ -17,6 +17,9 @@ $chrome: oklch(15% 0.013 280);
 $border: oklch(29% 0.015 280);
 $sidebar-width: 316px;
 $header: var(--ire-header, 56px);
+$upvote: #ff4500; /* same three in Viewer.module.scss */
+$downvote: #7193ff;
+$saved: #f0429f;
 
 /* --- Wide layout -------------------------------------------------------- */
 
@@ -325,6 +328,12 @@ shreddit-feed.ire-grid-compact {
     gap: 4px !important;
   }
 
+  /* What .ire-post-meta's @container rule measures */
+  > article,
+  > faceplate-batch > article {
+    container-type: inline-size;
+  }
+
   #{$media-post} {
     padding: 0 !important;
     margin: 0 !important;
@@ -436,11 +445,14 @@ shreddit-feed.ire-grid-compact {
     text-overflow: ellipsis;
   }
 
-  /* Age, score and comments, a line above the names */
+  /* Age, score and comments, a line above the names; the actions take the
+     end of it, or a line of their own on narrow tiles */
   .ire-post-stats {
     flex-basis: 100%;
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 10px;
     font-size: 11px;
     color: rgba(255, 255, 255, 0.6);
     font-variant-numeric: tabular-nums;
@@ -459,6 +471,55 @@ shreddit-feed.ire-grid-compact {
 
     &:hover {
       text-decoration: underline;
+    }
+  }
+
+  .ire-post-actions {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+    pointer-events: auto;
+  }
+
+  /* The smallest tiles have no room; the viewer has the buttons too */
+  @container (max-width: 149px) {
+    .ire-post-actions {
+      display: none;
+    }
+  }
+
+  .ire-post-action {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.35);
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.22);
+    }
+
+    &.ire-upvoted,
+    &.ire-downvoted,
+    &.ire-saved {
+      svg {
+        fill: currentColor;
+      }
+    }
+    &.ire-upvoted {
+      color: $upvote;
+    }
+    &.ire-downvoted {
+      color: $downvote;
+    }
+    &.ire-saved {
+      color: $saved;
     }
   }
 

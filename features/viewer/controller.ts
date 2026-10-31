@@ -3,6 +3,7 @@ import { fetchGifSeconds } from '@/lib/messages'
 import { getSettings, SLIDE_SPEEDS, updateSettings, watchSettings } from '@/lib/settings'
 import { currentFeed } from '../feed'
 import { passesMediaFilter, setHasAudio } from '../mediaFilter'
+import { refreshPostActions, toggleSavePost, votePost } from '../postActions'
 import { findArticle, isGifUrl, isMediaImage, type Post } from '../posts'
 import { indexOfPost, postAt, postCount, scanPosts } from './registry'
 import { showToast, useViewer } from './store'
@@ -46,6 +47,8 @@ function show(index: number, fromEnd = false) {
   else if (index >= postCount() - 3) loadMorePosts()
   preload(index + 1)
   preload(index - 1)
+  // Reddit may only now be filling the post in, having been scrolled to it
+  refreshPostActions()
   scheduleSlide()
 }
 
@@ -402,6 +405,9 @@ const KEYS: Record<string, () => void> = {
   ' ': toggleSlideshow,
   m: toggleMute,
   k: togglePlay,
+  a: () => votePost(currentPost()?.id ?? '', 1),
+  z: () => votePost(currentPost()?.id ?? '', -1),
+  s: () => toggleSavePost(currentPost()?.id ?? ''),
   '-': () => changeSlideSpeed(-1),
   _: () => changeSlideSpeed(-1),
   '+': () => changeSlideSpeed(1),
@@ -409,15 +415,20 @@ const KEYS: Record<string, () => void> = {
   Escape: closeViewer,
 }
 
+// These flip on and off, so a held key must not flicker through both
+const ONE_PRESS_KEYS = 'azs'
+
 function onKey(event: KeyboardEvent) {
   // Keys typed into our own controls (the volume slider) stay there
   if (event.key !== 'Escape' && event.composedPath()[0] instanceof HTMLInputElement) return
   if (event.ctrlKey || event.metaKey || event.altKey) return
-  const action = KEYS[event.key.length === 1 ? event.key.toLowerCase() : event.key]
+  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
+  const action = KEYS[key]
   if (!action) return
   event.preventDefault()
   // Keep Reddit's own shortcuts out of it
   event.stopPropagation()
+  if (event.repeat && ONE_PRESS_KEYS.includes(key)) return
   action()
 }
 

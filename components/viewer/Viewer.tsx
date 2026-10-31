@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
+  IconArrowBigDown,
   IconArrowBigUp,
+  IconBookmark,
   IconClock,
   IconMessageCircle,
   IconChevronDown,
@@ -43,6 +45,7 @@ import {
   toggleSlideshow,
 } from '@/features/viewer/controller'
 import { useViewer } from '@/features/viewer/store'
+import { readPostState, toggleSavePost, useActionTick, votePost } from '@/features/postActions'
 import { isGifUrl, type Post } from '@/features/posts'
 import { GifPlayer } from './GifPlayer'
 import { useGestures, wasTouch } from './useGestures'
@@ -60,6 +63,7 @@ function Overlay() {
   const galleryIndex = useViewer((s) => s.galleryIndex)
   const progress = useViewer((s) => s.progress)
   const wakes = useViewer((s) => s.wakes)
+  const toast = useViewer((s) => s.toast)
   const post = currentPost()
   const touch = useMedia(TOUCH_QUERY)
   const [idle, setIdle] = useState(false)
@@ -188,6 +192,9 @@ function Overlay() {
       {help && <Shortcuts touch={touch} onClose={() => setHelp(false)} />}
 
       {post.type === 'gallery' && <GalleryNav count={post.srcs.length} index={galleryIndex} />}
+
+      {/* The dock, which shows these elsewhere, steps aside for the viewer */}
+      {toast && <div className={styles.toast}>{toast}</div>}
 
       <footer ref={footer} className={styles.bottom}>
         <PostInfo post={post} />
@@ -402,6 +409,7 @@ function PostInfo({ post }: { post: Post }) {
       </div>
       {/* On phones the chips wrap onto more lines */}
       <div className={styles.links}>
+        <PostActions id={post.id} />
         {community && (
           <Chip href={community.href}>
             <IconUsersGroup size={14} stroke={1.8} />
@@ -431,8 +439,46 @@ function PostInfo({ post }: { post: Post }) {
   )
 }
 
+function PostActions({ id }: { id: string }) {
+  useActionTick()
+  const { upvoted, downvoted, saved } = readPostState(id)
+  return (
+    <div className={styles.actions}>
+      <RoundButton
+        tip="Upvote (A)"
+        small
+        pressed={upvoted}
+        className={styles.upvoted}
+        onClick={() => votePost(id, 1)}
+      >
+        <IconArrowBigUp size={18} stroke={1.8} />
+      </RoundButton>
+      <RoundButton
+        tip="Downvote (Z)"
+        small
+        pressed={downvoted}
+        className={styles.downvoted}
+        onClick={() => votePost(id, -1)}
+      >
+        <IconArrowBigDown size={18} stroke={1.8} />
+      </RoundButton>
+      <RoundButton
+        tip={saved ? 'Unsave (S)' : 'Save (S)'}
+        small
+        pressed={saved}
+        className={styles.saved}
+        onClick={() => toggleSavePost(id)}
+      >
+        <IconBookmark size={17} stroke={1.8} />
+      </RoundButton>
+    </div>
+  )
+}
+
 // When it was posted, its score and comment count
 function PostStats({ post }: { post: Post }) {
+  useActionTick()
+  const score = readPostState(post.id).score ?? post.score
   const comments = post.permalink ? `${post.permalink.replace(/\/?$/, '/')}#comments` : null
   return (
     <p className={styles.stats}>
@@ -442,10 +488,10 @@ function PostStats({ post }: { post: Post }) {
           {timeAgo(post.created)} ago
         </span>
       )}
-      {post.score !== null && (
-        <span title={`${post.score.toLocaleString()} points`}>
+      {score !== null && (
+        <span title={`${score.toLocaleString()} points`}>
           <IconArrowBigUp size={14} stroke={1.8} />
-          {compactNumber(post.score)}
+          {compactNumber(score)}
         </span>
       )}
       {post.comments !== null && comments && (
@@ -471,6 +517,7 @@ function RoundButton({
   small,
   large,
   active,
+  pressed,
   className,
   onClick,
   children,
@@ -479,6 +526,8 @@ function RoundButton({
   small?: boolean
   large?: boolean
   active?: boolean
+  /** An on/off button: says which it is now (CSS keys off this) */
+  pressed?: boolean
   className?: string
   onClick: () => void
   children: ReactNode
@@ -488,6 +537,7 @@ function RoundButton({
       type="button"
       title={tip}
       aria-label={tip}
+      aria-pressed={pressed}
       className={clsx(
         styles.round,
         small && styles.small,
@@ -519,6 +569,8 @@ const SHORTCUTS: [string[], string][] = [
   [['Wheel'], 'Previous / next image, then post'],
   [['Space'], 'Start / pause slideshow'],
   [['K'], 'Play / pause a video or GIF'],
+  [['A', 'Z'], 'Upvote / downvote'],
+  [['S'], 'Save / unsave'],
   [['−', '+'], 'Slideshow faster / slower'],
   [['M'], 'Mute / unmute'],
   [['Esc'], 'Close the viewer'],

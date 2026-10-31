@@ -19,3 +19,5 @@ web-ext.config.ts
 .DS_Store
 *.suo
 *.sw?
+
+/legacy/examples
