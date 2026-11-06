@@ -68,39 +68,58 @@ export function GifPlayer({ src, alt, raised }: { src: string; alt: string; rais
     }
   }, [src])
 
-  // Play: draw a frame, wait its delay, move on. Paused: draw and stay.
+  // Play: draw a frame, decode the next one while this one is up, show it when
+  // its time comes. Frames keep to a schedule (each one due a delay after the
+  // last was due), so decoding time doesn't slow playback down. Paused: draw
+  // and stay.
   useEffect(() => {
     if (!gif) return
     let stopped = false
     let timer: ReturnType<typeof setTimeout> | undefined
     const count = gif.delays.length
+    const decode = (index: number) =>
+      gif.decoder.decode({ frameIndex: index }).then((result) => result.image)
 
-    const draw = async (index: number) => {
-      try {
-        const { image } = await gif.decoder.decode({ frameIndex: index })
-        const el = canvas.current
-        if (stopped || !el) return image.close()
-        if (el.width !== image.displayWidth) el.width = image.displayWidth
-        if (el.height !== image.displayHeight) el.height = image.displayHeight
-        el.getContext('2d')?.drawImage(image, 0, 0)
-        image.close()
-        setFrame(index)
-      } catch {}
-    }
+    let next = decode(frameRef.current)
+    let due = 0 // when the frame being shown was meant to appear
 
-    const tick = async () => {
+    const step = async () => {
       const index = frameRef.current
-      await draw(index)
-      if (stopped || paused) return
-      timer = setTimeout(() => {
-        frameRef.current = (index + 1) % count
-        tick()
-      }, gif.delays[index])
+      let image: VideoFrame
+      try {
+        image = await next
+      } catch {
+        return
+      }
+      const el = canvas.current
+      if (stopped || !el) return image.close()
+      if (el.width !== image.displayWidth) el.width = image.displayWidth
+      if (el.height !== image.displayHeight) el.height = image.displayHeight
+      el.getContext('2d')?.drawImage(image, 0, 0)
+      image.close()
+      setFrame(index)
+      if (paused) return
+
+      const following = (index + 1) % count
+      next = decode(following)
+      // Far behind (a background tab, a very slow decode): start the schedule
+      // over from now instead of rushing through frames to catch up
+      const now = performance.now()
+      due = !due || now - due > 250 ? now : due
+      due += gif.delays[index]!
+      timer = setTimeout(
+        () => {
+          frameRef.current = following
+          step()
+        },
+        Math.max(0, due - performance.now()),
+      )
     }
-    tick()
+    step()
     return () => {
       stopped = true
       clearTimeout(timer)
+      next.then((image) => image.close()).catch(() => {})
     }
   }, [gif, paused, seeks])
 
